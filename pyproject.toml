@@ -1,0 +1,33 @@
+# Packaging for the "cvx" package (CareerVerify-XAI).
+# Install with:  pip install -e .
+#
+# Why "dependencies" is empty: library versions come ONLY from
+# requirements-lock.txt (CLAUDE.md rule 10). Listing them here would let pip
+# pick its own versions, so this file names no libraries and no versions.
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cvx"
+version = "0.1.0"
+description = "CareerVerify-XAI: leakage-aware, explainable fake job posting detection"
+readme = "README.md"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+# Oldest Python the code supports; Colab and the laptop must share one minor version.
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E/F: errors, I: import order, UP: modern syntax, B: common bugs.
+select = ["E", "F", "I", "UP", "B"]

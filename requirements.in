@@ -1,0 +1,29 @@
+# Top-level libraries for CareerVerify-XAI. NO versions here.
+# Exact versions live only in requirements-lock.txt, which the owner creates
+# in Colab (PRD Section 10.5):
+#     pip install -r requirements.in
+#     pip freeze > requirements-lock.txt
+
+# data and ML
+pandas
+numpy
+scipy
+scikit-learn
+xgboost
+imbalanced-learn
+nltk
+
+# explainability
+shap
+lime
+
+# plots and config
+matplotlib
+PyYAML
+
+# web app (Streamlit, changed from Flask on 20 Nov 2026)
+streamlit
+
+# testing and quality
+pytest
+ruff

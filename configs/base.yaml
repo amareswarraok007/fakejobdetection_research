@@ -1,0 +1,29 @@
+# Base settings shared by every experiment. Experiment configs start with
+# "extends: base.yaml" and override only what they change.
+
+experiment_id: base
+seed: 42
+
+paths:
+  data_csv: data/fake_job_postings.csv   # relative to the repository root
+  runs_dir: runs
+  reports_dir: reports
+
+preprocessing: p_cvx                     # p_cv (Career Verify copy) or p_cvx (ours)
+
+split:
+  method: grouped_stratified             # or random_stratified (P-CV reproduction)
+  ratios: [0.70, 0.15, 0.15]             # train, validation, test
+  near_dup_threshold: 0.95               # TF-IDF cosine at or above this = near-duplicate
+  n_folds: 20                            # StratifiedGroupKFold folds: 14 train, 3 val, 3 test
+
+tfidf:                                   # P-CVX settings (PRD Section 6.4)
+  ngram_range: [1, 2]
+  min_df: 3
+  max_df: 0.9
+  max_features: 20000
+  sublinear_tf: true
+
+features:
+  text: true
+  metadata: false

@@ -1,0 +1,25 @@
+# Raw data, experiment outputs and exported models are never committed.
+data/
+runs/
+app/model_store/
+app/data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tools
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
