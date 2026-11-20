@@ -49,3 +49,14 @@ def test_bootstrap_skips_single_class_resamples() -> None:
     y = np.array([0, 0, 0, 1])  # many resamples will have no fake row
     ci = bootstrap_ci(y, np.array([0.1, 0.2, 0.3, 0.9]), {}, n_resamples=100, seed=1)
     assert 0 < ci["n_used"] < 100
+
+
+def test_wilcoxon_paired() -> None:
+    from cvx.evaluate.stats import wilcoxon_paired
+
+    a = np.array([0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2])
+    b = a - 0.1  # every difference is +0.1 -> clearly different
+    result = wilcoxon_paired(a, b)
+    assert result["n"] == 8 and result["median_difference"] == pytest.approx(0.1)
+    assert result["p_value"] < 0.05
+    assert wilcoxon_paired(a, a)["p_value"] == 1.0

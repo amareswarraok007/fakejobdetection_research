@@ -65,5 +65,6 @@ def test_write_tables(tiny_runs: dict[str, Any], tmp_path: Path) -> None:
         "e0_reproduce.md",
         "e1_leakage.md",
         "e3_models.md",
+        "e4_ablations.md",
         "career_verify_vs_e0_vs_e2.md",
     } == names

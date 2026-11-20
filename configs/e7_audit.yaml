@@ -1,0 +1,20 @@
+# E7 — Shortcut audit and error analysis (PRD Section 8.2).
+experiment_id: e7_audit
+extends: base.yaml
+task: audit
+tuning: {method: grouped_cv, cv_folds: 5, scoring: average_precision}   # one candidate -> no CV
+
+xai:
+  model_store: app/model_store
+  models: [lr_text, xgb_text]
+  audit_columns: [location, industry]   # E7a
+  mask_tokens: []                       # E7b: add tokens here after reviewing the E5 top-30
+  top_global: 30
+  n_global: 1000
+  n_errors: 20
+
+assumptions:
+  - "E7a/E7b re-train the same model type with the hyperparameters chosen in E4 (read from the model card), on the training split; thresholds from validation; test scored once."
+  - "E7a adds location and industry as one-hot columns (values seen fewer than 5 times share one bucket)."
+  - "E7b masks flagged tokens with 'maskedtoken'. Automatic flags = top-30 SHAP words that occur in the dataset's location values (3+ letters, not NLTK stop words), plus any xai.mask_tokens added by the owner."
+  - "errors.csv: the 20 most confident false negatives (lowest scores) and false positives (highest scores) at t_f1, with top-5 SHAP features; the cause column is filled in by hand."

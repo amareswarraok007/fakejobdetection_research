@@ -8,7 +8,11 @@ preprocessing: p_cvx
 models: [lr, xgb]
 grids:
   lr: {C: [0.1, 1.0, 10.0]}
-tuning: {method: grouped_cv, cv_folds: 5, scoring: average_precision}
+tuning:
+  method: grouped_cv
+  cv_folds: 5
+  scoring: average_precision
+  overrides: {xgb: validation}   # speed mode: XGBoost depth chosen on the validation split
 thresholds: [0.5, t_f1, t_r90]
 stats:
   bootstrap: 1000

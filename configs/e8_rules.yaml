@@ -1,0 +1,9 @@
+# E8 — Safety rule hit rates on EMSCAD (PRD Section 8.2). No model needed.
+experiment_id: e8_rules
+extends: base.yaml
+task: rules
+
+assumptions:
+  - "Rules R1, R2, R5, R6, R7 run on the five raw text fields joined (every posting in the CSV as downloaded)."
+  - "R3 and R4 need recruiter email and company website, which EMSCAD does not have: not validated."
+  - "The optional Indian external test set is a stretch item (S1) and not part of this run."

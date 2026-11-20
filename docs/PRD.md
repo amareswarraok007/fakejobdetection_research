@@ -362,10 +362,12 @@ These decisions replace the matching parts of Sections 8, 11 and 12.
 
 - **Batches.** Milestones are built in three batches, and the agent stops after each batch for the owner's Colab run: M2+M3, then M4+M5, then M6+M7+M8.
 - **Small grids.** At most 3 values per hyperparameter. Logistic Regression uses C in {0.1, 1, 10} in every experiment (E0–E4); the other grids in E3 already have 3 values or fewer.
+- **XGBoost speed-up (approved 20 Nov 2026).** On a Colab CPU one XGBoost tree on the ~20,000 sparse TF-IDF features took about 2 seconds, so 16 fits per model could run for hours. XGBoost therefore (1) chooses `max_depth` in {4, 6, 8} on the validation split instead of grouped 5-fold CV (3 fits, winner reused; config `tuning.overrides: {xgb: validation}`), and (2) uses `colsample_bytree = 0.3` and `max_bin = 64`. Learning rate 0.05, up to 600 trees, early stopping and `scale_pos_weight` are unchanged. NB, linear SVM, RF and LR keep grouped 5-fold CV.
 - **Colab budget.** `colab_runner.ipynb` has one cell per experiment, and all experiments of a batch must run in one Colab CPU session in under 1 hour.
 - **LIME.** 100 test postings and 3 seeds (E6 sample and stability).
 - **DistilBERT.** No new DistilBERT training (stretch item S4 dropped). The DistilBERT result from the owner's earlier notebook used a different split, so it never appears in the M3 comparison tables or McNemar tests. It may only be reported as a separate side experiment, next to its own Logistic Regression baseline trained on that same split.
 - **App.** Streamlit has only the Analyze and About pages. There is no History, Model or Baseline page, no `app/db.py` and no SQLite history.
+- **Explanation experiments use the exported models.** E5–E7 load the E4 models from `app/model_store` (SHA-256, version and smoke checks first), so they explain exactly the models the app uses; the split and dataset hash must match the model card. E6 and E7 use the text-only models (`lr_text`, `xgb_text`), so removing words changes the model input only through the text. The predicted label and the TP/TN sample use each model's `t_f1`.
 - **Unchanged.** All tests, ruff, and the rule that no number is ever typed by hand.
 
 ## 10. New repository and software architecture
@@ -411,22 +413,24 @@ careerverify-xai/
 │   ├── config.py             # load + validate YAML (dataclasses)
 │   ├── run.py                # CLI: python -m cvx.run --config ...
 │   ├── runio.py              # run folders: config.yaml, env.json, CSV/JSON, run.log, models/
+│   ├── tasks.py              # runs E5-E8 (config `task`: explain, faithfulness, audit, rules)
 │   ├── data/      load.py, profile.py, clean.py (p_cv, p_cvx), dedup.py, split.py,
 │   │              prepare.py (split plan, model data), resample.py (E1, SMOTE)
 │   ├── features/  text.py, meta.py, build.py (ColumnTransformer)
 │   ├── models/    zoo.py (NB, SVM, RF, LR, XGB), train.py (tuning, thresholds)
 │   ├── evaluate/  metrics.py, stats.py (bootstrap, McNemar, Wilcoxon), plots.py
-│   ├── explain/   shap_linear.py, shap_tree.py, lime_text.py, reasons.py, highlight.py
-│   ├── xai_eval/  faithfulness.py, agreement.py, stability.py
-│   ├── audit/     shortcuts.py, errors.py
-│   ├── rules/     safety.py (R1-R7)
+│   ├── explain/   core.py, shap_linear.py, shap_tree.py, dispatch.py, lime_text.py, reasons.py,
+│   │              highlight.py, context.py (loads exported models), experiment.py (E5)
+│   ├── xai_eval/  faithfulness.py, agreement.py, stability.py, experiment.py (E6)
+│   ├── audit/     shortcuts.py, errors.py, experiment.py (E7)
+│   ├── rules/     safety.py (R1-R7), experiment.py (E8)
 │   ├── artifacts/ save.py, load.py (hash, version, smoke checks)
-│   ├── report/    runs.py, tables.py, figures.py (used by scripts/make_*.py)
+│   ├── report/    runs.py, tables.py, task_tables.py, figures.py, compare.py
 │   ├── schema.py             # build_input(form) -> DataFrame for the app
 │   └── service.py            # analyze(), lime_compare(), health(): what the app calls
 ├── notebooks/
 │   └── colab_runner.ipynb    # thin: clone, install, mount Drive, run configs
-├── scripts/   make_tables.py, make_figures.py, export_model.py
+├── scripts/   make_tables.py, make_figures.py, export_model.py, compare_runs.py
 ├── app/
 │   ├── main.py               # Streamlit entry point: Analyze page (st.form + result)
 │   ├── pages/                # 1_About.py (speed mode: no History, Model or Baseline pages)

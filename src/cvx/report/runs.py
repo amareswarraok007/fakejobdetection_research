@@ -11,7 +11,17 @@ from cvx.runio import STATUS_COMPLETE, read_json
 
 logger = logging.getLogger(__name__)
 
-EXPERIMENTS = ("e0_reproduce", "e1_leakage", "e2_protocol", "e3_models", "e4_ablations")
+EXPERIMENTS = (
+    "e0_reproduce",
+    "e1_leakage",
+    "e2_protocol",
+    "e3_models",
+    "e4_ablations",
+    "e5_explain",
+    "e6_faithfulness",
+    "e7_audit",
+    "e8_rules",
+)
 
 
 @dataclass(frozen=True)
@@ -43,7 +53,9 @@ def latest_complete_run(runs_root: str | Path, experiment_id: str) -> Path | Non
 def load_run(run_dir: str | Path) -> RunData:
     """Read metrics.json, predictions.csv and env.json from a run folder."""
     path = Path(run_dir)
-    predictions = pd.read_csv(path / "predictions.csv", dtype={"row_id": str})
+    # Task runs (E5-E8) have no predictions.csv.
+    file = path / "predictions.csv"
+    predictions = pd.read_csv(file, dtype={"row_id": str}) if file.is_file() else pd.DataFrame()
     return RunData(
         path, read_json(path / "metrics.json"), predictions, read_json(path / "env.json")
     )

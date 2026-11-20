@@ -7,7 +7,11 @@ features: {text: true, metadata: false}
 models: [nb, linear_svm, rf, lr, xgb]
 grids:
   lr: {C: [0.1, 1.0, 10.0]}   # speed mode; other grids are the zoo defaults (<= 3 values)
-tuning: {method: grouped_cv, cv_folds: 5, scoring: average_precision}
+tuning:
+  method: grouped_cv
+  cv_folds: 5
+  scoring: average_precision
+  overrides: {xgb: validation}   # speed mode: XGBoost depth chosen on the validation split
 thresholds: [0.5, t_f1, t_r90]
 stats: {bootstrap: 1000, mcnemar: [[lr, xgb]]}
 
@@ -18,5 +22,6 @@ assumptions:
   - "Linear SVM: LinearSVC, class_weight='balanced', max_iter 5000, C in {0.1, 1, 10}; probabilities from CalibratedClassifierCV(method='sigmoid') with 5 internal folds that are GROUPED (StratifiedGroupKFold on the training groups)."
   - "Random Forest: 300 trees, class_weight='balanced_subsample', no grid."
   - "Logistic Regression: L2, class_weight='balanced', lbfgs, max_iter 2000, C in {0.1, 1, 10} (speed mode)."
-  - "XGBoost: tree_method='hist', learning_rate 0.05, max_depth in {4, 6, 8}, scale_pos_weight = genuine/fake in the rows being fitted, up to 600 trees, early stopping after 50 rounds without PR-AUC (aucpr) gain; during CV it stops on each fold's held-out part, in the final fit on the validation split."
+  - "XGBoost: tree_method='hist', learning_rate 0.05, max_depth in {4, 6, 8}, scale_pos_weight = genuine/fake in the rows being fitted, up to 600 trees, early stopping after 50 rounds without PR-AUC (aucpr) gain on the validation split."
+  - "XGBoost speed mode (owner-approved): depth chosen on the validation split (3 fits, winner reused) instead of grouped 5-fold CV; colsample_bytree 0.3 and max_bin 64. The other four models keep grouped 5-fold CV."
   - "McNemar: exact binomial version, LR vs XGBoost, at each threshold (each model uses its own validation thresholds)."

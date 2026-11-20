@@ -6,7 +6,8 @@
 | linear_svm | Linear SVM + sigmoid calibration        | C in {0.1, 1, 10}          |
 | rf         | Random Forest, 300 trees                | none (fixed settings)      |
 | lr         | Logistic Regression, L2, balanced       | C in {0.1, 1, 10}          |
-| xgb        | XGBoost, hist, learning rate 0.05       | max_depth in {4, 6, 8}     |
+| xgb        | XGBoost, hist, lr 0.05, colsample 0.3,  | max_depth in {4, 6, 8}     |
+|            | max_bin 64 (speed mode)                 |                            |
 
 A config can override a grid with its ``grids`` key (E0 uses this).
 """
@@ -37,6 +38,10 @@ RF_TREES = 300
 XGB_MAX_TREES = 600
 XGB_LEARNING_RATE = 0.05
 XGB_EARLY_STOPPING_ROUNDS = 50
+# Speed mode (owner-approved 20 Nov 2026, PRD §9.1): with ~20,000 sparse word features,
+# each tree samples 30% of the features and uses 64 histogram bins instead of 256.
+XGB_COLSAMPLE_BYTREE = 0.3
+XGB_MAX_BIN = 64
 
 
 def n_jobs() -> int:
@@ -114,6 +119,8 @@ def make_classifier(
             learning_rate=XGB_LEARNING_RATE,
             n_estimators=XGB_MAX_TREES,
             early_stopping_rounds=XGB_EARLY_STOPPING_ROUNDS,
+            colsample_bytree=XGB_COLSAMPLE_BYTREE,
+            max_bin=XGB_MAX_BIN,
             eval_metric="aucpr",
             scale_pos_weight=scale_pos_weight(y_train),
             random_state=seed,

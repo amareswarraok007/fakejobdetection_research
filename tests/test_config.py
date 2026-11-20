@@ -205,3 +205,13 @@ def test_no_variants_gives_main(tmp_path: Path) -> None:
 def test_invalid_m2_keys_rejected(tmp_path: Path, change: dict, message: str) -> None:
     with pytest.raises(ConfigError, match=message):
         load_config(write_yaml(tmp_path / "c.yaml", {**MODELLED, **change}))
+
+
+def test_tuning_override_per_model(tmp_path: Path) -> None:
+    data = {**MODELLED, "tuning": {**MODELLED["tuning"], "overrides": {"xgb": "validation"}}}
+    tuning = load_config(write_yaml(tmp_path / "c.yaml", data)).tuning
+    assert tuning.for_model("xgb").method == "validation"
+    assert tuning.for_model("lr").method == "grouped_cv"
+    bad = {**MODELLED, "tuning": {**MODELLED["tuning"], "overrides": {"bert": "validation"}}}
+    with pytest.raises(ConfigError, match="overrides"):
+        load_config(write_yaml(tmp_path / "bad.yaml", bad))

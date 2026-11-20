@@ -1,0 +1,23 @@
+# E6 — Faithfulness of SHAP vs LIME (PRD Section 8.2; main contribution; speed mode §9.1).
+experiment_id: e6_faithfulness
+extends: base.yaml
+task: faithfulness
+
+xai:
+  model_store: app/model_store
+  models: [lr_text, xgb_text]
+  n_postings: 100             # speed mode: up to 50 true positives + 50 true negatives
+  ks: [1, 3, 5, 10, 20]
+  random_draws: 5
+  lime_samples: 1000
+  lime_features: 20           # enough words for k = 20
+  lime_seeds: 3               # speed mode: stability over 3 seeds (42, 43, 44)
+
+assumptions:
+  - "Text-only models (lr_text, xgb_text): word removal then changes the model input only through the text, so 'metadata stays fixed' holds exactly."
+  - "Predicted label and the TP/TN sample use each model's t_f1 threshold from the model card; the sample is drawn with seed 42 and is the same for SHAP, LIME and random."
+  - "Top-k words: ordered by push towards the predicted label; only words of 2+ characters present in the posting (field labels excluded) can be removed."
+  - "If a posting has fewer than k eligible words, all of them are used for that k."
+  - "Random baseline: 5 random orders of the posting's words (seeded per posting); comp/suff averaged over the 5 draws."
+  - "Agreement uses top-k by absolute score; Spearman over the union of the two top-10 lists (missing = 0)."
+  - "Wilcoxon: two-sided paired signed-rank on per-posting comp@5; zero differences dropped (SciPy default)."

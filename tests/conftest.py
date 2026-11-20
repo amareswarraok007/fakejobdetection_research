@@ -205,6 +205,18 @@ tuning: {method: grouped_cv, cv_folds: 3, scoring: average_precision}
 stats: {bootstrap: 20, mcnemar: [[lr, xgb]]}
 export_models: true
 """,
+    "e4_ablations": """
+experiment_id: e4_ablations
+preprocessing: p_cvx
+split: {method: grouped_stratified, ratios: [0.6, 0.2, 0.2], near_dup_threshold: 0.95, n_folds: 5}
+models: [lr, xgb]
+grids: {lr: {C: [1.0]}, xgb: {max_depth: [3]}}
+tuning: {method: grouped_cv, cv_folds: 3, scoring: average_precision}
+export_models: true
+variants:
+  - {name: text, overrides: {features: {metadata: false}}}
+  - {name: full, overrides: {features: {metadata: true}}}
+""",
 }
 
 
@@ -224,3 +236,66 @@ def tiny_runs(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
         config.write_text(text, encoding="utf-8")
         paths[name] = run_experiment(config)
     return {"root": runs, "runs": paths, "data": data}
+
+
+@pytest.fixture(scope="session")
+def fitted_models() -> dict[str, Any]:
+    """Tiny LR and XGBoost pipelines (text-only and full), trained inside the tests."""
+    from sklearn.pipeline import Pipeline
+
+    from cvx.config import TfidfConfig
+    from cvx.data.split import random_stratified_split
+    from cvx.explain.shap_linear import training_means
+    from cvx.features.build import make_model_input, make_preprocessor
+    from cvx.models.zoo import make_classifier
+
+    corpus_df = build_corpus()
+    table = make_model_input(corpus_df, "p_cvx", metadata=True).reset_index(drop=True)
+    y = corpus_df["fraudulent"].to_numpy()
+    split = random_stratified_split(y, (0.6, 0.2, 0.2), 42)
+    tfidf = TfidfConfig([1, 2], 1, 1.0, 500, True)
+    train, val = split.train, split.val
+    models, means = {}, {}
+    for model_id in ("lr", "xgb"):
+        params = {"C": 1.0} if model_id == "lr" else {"max_depth": 3}
+        for variant, metadata in (("text", False), ("full", True)):
+            pipe = Pipeline(
+                [
+                    ("features", make_preprocessor(tfidf, metadata)),
+                    ("clf", make_classifier(model_id, params, y[train], 42)),
+                ]
+            )
+            if model_id == "xgb":
+                features = pipe.named_steps["features"].fit(table.iloc[train], y[train])
+                pipe.named_steps["clf"].fit(
+                    features.transform(table.iloc[train]),
+                    y[train],
+                    eval_set=[(features.transform(table.iloc[val]), y[val])],
+                    verbose=False,
+                )
+            else:
+                pipe.fit(table.iloc[train], y[train])
+            name = f"{model_id}_{variant}"
+            models[name] = pipe
+            means[name] = training_means(pipe, table.iloc[train])
+    return {
+        "models": models,
+        "means": means,
+        "table": table,
+        "y": y,
+        "split": split,
+        "postings": corpus_df,
+    }
+
+
+STORE_MODELS = ["lr_text", "lr_full", "xgb_text", "xgb_full"]
+
+
+@pytest.fixture(scope="session")
+def tiny_store(tiny_runs: dict[str, Any], tmp_path_factory: pytest.TempPathFactory) -> Any:
+    """A model store exported from the tiny E4 run (never real models)."""
+    from cvx.artifacts.save import export_models
+
+    out = tmp_path_factory.mktemp("model_store")
+    export_models(tiny_runs["runs"]["e4_ablations"], STORE_MODELS, out, tiny_runs["data"])
+    return out

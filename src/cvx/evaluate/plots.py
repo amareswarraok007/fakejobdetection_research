@@ -13,7 +13,7 @@ from sklearn.metrics import precision_recall_curve, roc_curve
 Curves = dict[str, tuple[np.ndarray, np.ndarray]]  # label -> (y_true, scores)
 
 
-def _save(fig: Figure, path: str | Path) -> Path:
+def save_figure(fig: Figure, path: str | Path) -> Path:
     """Save a figure as PNG, creating the folder if needed."""
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -32,7 +32,7 @@ def plot_pr_curves(curves: Curves, path: str | Path, title: str) -> Path:
         xlabel="Recall (fake)", ylabel="Precision (fake)", title=title, xlim=(0, 1), ylim=(0, 1.02)
     )
     ax.legend(fontsize="small")
-    return _save(fig, path)
+    return save_figure(fig, path)
 
 
 def plot_roc_curves(curves: Curves, path: str | Path, title: str) -> Path:
@@ -45,7 +45,7 @@ def plot_roc_curves(curves: Curves, path: str | Path, title: str) -> Path:
     ax.plot([0, 1], [0, 1], linestyle="--", color="grey", label="chance")
     ax.set(xlabel="False positive rate", ylabel="True positive rate", title=title)
     ax.legend(fontsize="small")
-    return _save(fig, path)
+    return save_figure(fig, path)
 
 
 def plot_confusion(counts: dict[str, int], path: str | Path, title: str) -> Path:
@@ -66,4 +66,32 @@ def plot_confusion(counts: dict[str, int], path: str | Path, title: str) -> Path
         ylabel="Actual",
         title=title,
     )
-    return _save(fig, path)
+    return save_figure(fig, path)
+
+
+def shap_bar_figure(items: list[tuple[str, float]], title: str) -> Figure:
+    """Horizontal bar chart of (label, SHAP value); red = towards fake, green = genuine.
+
+    Returned (not saved) so the app can show it with ``st.pyplot``. Bars also carry a
+    +/- value label, so colour is not the only signal.
+    """
+    labels = [label for label, _ in items][::-1]
+    values = [value for _, value in items][::-1]
+    fig = Figure(figsize=(6, 0.35 * max(len(items), 1) + 1))
+    ax = fig.add_subplot()
+    colours = ["#dc2626" if v > 0 else "#16a34a" for v in values]
+    ax.barh(range(len(values)), values, color=colours)
+    ax.set_yticks(range(len(values)), labels)
+    for position, value in enumerate(values):
+        ax.annotate(
+            f"{value:+.3f}",
+            (value, position),
+            va="center",
+            fontsize="small",
+            xytext=(3 if value >= 0 else -3, 0),
+            textcoords="offset points",
+            ha="left" if value >= 0 else "right",
+        )
+    ax.axvline(0, color="grey", linewidth=0.8)
+    ax.set(title=title, xlabel="SHAP value (log-odds): + towards fake, − towards genuine")
+    return fig

@@ -6,13 +6,14 @@
 - McNemar's test: do two models make different mistakes on the same test postings?
   Only the postings where exactly one model is right matter (b and c below).
   We use the exact binomial version, which is valid for any b + c.
-(The Wilcoxon test for E6 is added in milestone M5.)
+- Wilcoxon signed-rank test (E6): are paired per-posting values (e.g. comp@5 of
+  SHAP vs random) different, without assuming a normal distribution?
 """
 
 from typing import Any
 
 import numpy as np
-from scipy.stats import binomtest
+from scipy.stats import binomtest, wilcoxon
 
 from cvx.evaluate.metrics import confusion_counts, rates_from_counts, threshold_free
 
@@ -85,3 +86,22 @@ def mcnemar_exact(
     c = int(np.sum(~right_a & right_b))
     p_value = 1.0 if b + c == 0 else float(binomtest(b, b + c, 0.5).pvalue)
     return {"test": "exact McNemar (binomial)", "b": b, "c": c, "p_value": p_value}
+
+
+def wilcoxon_paired(first: np.ndarray, second: np.ndarray) -> dict[str, Any]:
+    """Two-sided paired Wilcoxon signed-rank test on ``first - second``.
+
+    Pairs with a zero difference are dropped (SciPy's default). If every difference is
+    zero the test cannot run; the p-value is then reported as 1.0.
+    """
+    first, second = np.asarray(first, dtype=float), np.asarray(second, dtype=float)
+    differences = first - second
+    result: dict[str, Any] = {
+        "test": "Wilcoxon signed-rank (two-sided)",
+        "n": int(len(differences)),
+        "median_difference": float(np.median(differences)) if len(differences) else None,
+    }
+    if not np.any(differences != 0):
+        return {**result, "statistic": None, "p_value": 1.0}
+    outcome = wilcoxon(first, second)
+    return {**result, "statistic": float(outcome.statistic), "p_value": float(outcome.pvalue)}

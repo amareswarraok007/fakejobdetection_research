@@ -58,3 +58,10 @@ def test_every_model_fits_and_gives_probabilities(model_id: str) -> None:
     assert proba.shape == (60,) and ((proba >= 0) & (proba <= 1)).all()
     if model_id == "linear_svm":
         assert isinstance(model, CalibratedClassifierCV) and isinstance(model.cv, list)
+
+
+def test_xgboost_speed_settings() -> None:
+    model = make_classifier("xgb", {"max_depth": 4}, np.array([0, 1]), seed=42)
+    params = model.get_params()
+    assert params["colsample_bytree"] == 0.3 and params["max_bin"] == 64
+    assert params["learning_rate"] == 0.05 and params["n_estimators"] == 600

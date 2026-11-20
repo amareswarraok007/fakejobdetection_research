@@ -20,8 +20,8 @@ def config(tmp_path):
         "experiment_id: t\nseed: 42\n"
         "paths: {data_csv: x.csv, runs_dir: runs, reports_dir: reports}\n"
         "preprocessing: p_cvx\n"
-        "split: {method: grouped_stratified, ratios: [0.6, 0.2, 0.2], near_dup_threshold: 0.95, n_folds: 5}\n"
-        "tfidf: {ngram_range: [1, 1], min_df: 1, max_df: 1.0, max_features: null, sublinear_tf: false}\n",
+        "split: {method: grouped_stratified, ratios: [0.6, 0.2, 0.2], near_dup_threshold: 0.95, n_folds: 5}\n"  # noqa: E501
+        "tfidf: {ngram_range: [1, 1], min_df: 1, max_df: 1.0, max_features: null, sublinear_tf: false}\n",  # noqa: E501
         encoding="utf-8",
     )
     return load_config(path)
@@ -58,8 +58,13 @@ def test_take_and_with_rows() -> None:
     assert take(sparse.identity(3, format="csr"), np.array([1])).toarray().tolist() == [[0, 1, 0]]
     from cvx.data.prepare import ModelData
 
-    data = ModelData(frame, np.array([0, 1, 1]), np.array(["x", "y", "z"]),
-                     SplitIndices(np.array([0]), np.array([1]), np.array([2])), np.array([5, 6, 7]))
+    data = ModelData(
+        frame,
+        np.array([0, 1, 1]),
+        np.array(["x", "y", "z"]),
+        SplitIndices(np.array([0]), np.array([1]), np.array([2])),
+        np.array([5, 6, 7]),
+    )
     picked = with_rows(data, np.array([1, 1, 2]), data.split)
     assert picked.ids.tolist() == ["y", "y", "z"] and picked.groups is None
     assert picked.X.index.tolist() == [0, 1, 2]

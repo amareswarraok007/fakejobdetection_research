@@ -78,7 +78,9 @@ def make_fold(
     X_fit, X_eval = take(data.X, fit_rows), take(data.X, eval_rows)
     features = None
     if not data.prevectorized:
-        features = make_preprocessor(config.tfidf, config.features.metadata)
+        features = make_preprocessor(
+            config.tfidf, config.features.metadata, tuple(config.features.extra_categories)
+        )
         X_fit, X_eval = features.fit_transform(X_fit), features.transform(X_eval)
     groups = None if data.groups is None else data.groups[fit_rows]
     return FoldData(features, X_fit, data.y[fit_rows], groups, X_eval, data.y[eval_rows])

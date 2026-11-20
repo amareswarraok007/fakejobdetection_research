@@ -27,6 +27,10 @@ SPLIT_METHODS = ("random_stratified", "grouped_stratified")
 MODEL_IDS = ("nb", "linear_svm", "rf", "lr", "xgb")
 NAMED_THRESHOLDS = ("t_f1", "t_r90")
 TUNING_METHODS = ("validation", "grouped_cv")
+# "train": E0-E4 (fit and evaluate models). The others work on exported models (E5-E7)
+# or on the data alone (E8).
+TASKS = ("train", "explain", "faithfulness", "audit", "rules")
+AUDIT_COLUMNS = ("location", "industry", "department")
 SCORING_METRICS = ("average_precision", "roc_auc")
 RESAMPLE_METHODS = ("random_oversample", "smote")
 RESAMPLE_WHEN = ("before_split", "train_only")
@@ -77,6 +81,8 @@ class FeaturesConfig:
 
     text: bool = True
     metadata: bool = False
+    # E7a shortcut audit only: extra category columns (location, industry, department).
+    extra_categories: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -86,6 +92,14 @@ class TuningConfig:
     method: str
     scoring: str
     cv_folds: int | None = None
+    # Per-model method, e.g. {xgb: validation} (speed mode, PRD §9.1).
+    overrides: dict[str, str] = field(default_factory=dict)
+
+    def for_model(self, model_id: str) -> "TuningConfig":
+        """The tuning settings for one model (its override, if any, replaces ``method``)."""
+        if model_id not in self.overrides:
+            return self
+        return dataclasses.replace(self, method=self.overrides[model_id], overrides={})
 
 
 @dataclass(frozen=True)
@@ -117,6 +131,27 @@ class VariantConfig:
 
 
 @dataclass(frozen=True)
+class XaiConfig:
+    """Settings for the explanation experiments E5-E7 (PRD Section 8.2; speed mode §9.1)."""
+
+    model_store: str = "app/model_store"
+    models: list[str] = field(default_factory=list)
+    n_postings: int = 100
+    n_check: int = 20
+    n_examples: int = 10
+    n_global: int = 1000
+    ks: list[int] = field(default_factory=lambda: [1, 3, 5, 10, 20])
+    random_draws: int = 5
+    lime_samples: int = 1000
+    lime_features: int = 20
+    lime_seeds: int = 3
+    top_global: int = 30
+    n_errors: int = 20
+    audit_columns: list[str] = field(default_factory=lambda: ["location", "industry"])
+    mask_tokens: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class Config:
     """One fully merged and validated experiment config."""
 
@@ -137,6 +172,8 @@ class Config:
     compare_to: str | None = None
     export_models: bool = False
     assumptions: list[str] = field(default_factory=list)
+    task: str = "train"
+    xai: XaiConfig | None = None
 
 
 def load_config(path: str | Path) -> Config:
@@ -279,6 +316,12 @@ def _validate(config: Config) -> None:
     _validate_grids(config.grids)
     if config.tuning is not None:
         _validate_tuning(config.tuning, config.split)
+    _check_choice("task", config.task, TASKS)
+    unknown_extra = [c for c in config.features.extra_categories if c not in AUDIT_COLUMNS]
+    if unknown_extra:
+        raise ConfigError(f"Unknown features.extra_categories {unknown_extra}.")
+    if config.task in ("explain", "faithfulness", "audit"):
+        _validate_xai(config.xai)
     if config.models and config.tuning is None:
         raise ConfigError("'tuning' is required when 'models' is set.")
     if config.resample is not None:
@@ -338,6 +381,9 @@ def _validate_tuning(tuning: TuningConfig, split: SplitConfig) -> None:
     """Grouped CV needs a fold count and a grouped split (groups come from the split)."""
     _check_choice("tuning.method", tuning.method, TUNING_METHODS)
     _check_choice("tuning.scoring", tuning.scoring, SCORING_METRICS)
+    for model_id, method in tuning.overrides.items():
+        _check_choice("tuning.overrides key", model_id, MODEL_IDS)
+        _check_choice(f"tuning.overrides.{model_id}", method, TUNING_METHODS)
     if tuning.method == "grouped_cv":
         if tuning.cv_folds is None or tuning.cv_folds < 2:
             raise ConfigError("'tuning.cv_folds' must be an integer >= 2 for grouped_cv.")
@@ -391,3 +437,19 @@ def _validate_variants(config: Config) -> None:
             raise ConfigError(f"Variant {variant.name!r} may not override {blocked}.")
     if config.compare_to is not None and config.compare_to not in names:
         raise ConfigError(f"'compare_to' must name a variant, got {config.compare_to!r}.")
+
+
+def _validate_xai(xai: XaiConfig | None) -> None:
+    """E5-E7 need an ``xai`` section naming exported models; sizes must be positive."""
+    if xai is None or not xai.models:
+        raise ConfigError(
+            "Tasks explain/faithfulness/audit need 'xai.models' (exported model ids)."
+        )
+    sizes = (xai.n_postings, xai.n_check, xai.lime_samples, xai.lime_seeds, xai.random_draws)
+    if any(not isinstance(v, int) or v < 1 for v in sizes) or not xai.ks:
+        raise ConfigError(
+            "xai sizes (n_postings, n_check, lime_samples, …) must be positive integers."
+        )
+    unknown = [c for c in xai.audit_columns if c not in AUDIT_COLUMNS]
+    if unknown:
+        raise ConfigError(f"Unknown xai.audit_columns {unknown}. Allowed: {list(AUDIT_COLUMNS)}")

@@ -18,7 +18,9 @@ def _safe(name: str) -> str:
 def experiment_figures(experiment_id: str, run: RunData, out_dir: Path) -> list[Path]:
     """PR and ROC curves per variant (all models together) and one confusion matrix
     per variant, model and threshold, from ``predictions.csv`` and ``metrics.json``."""
-    written = []
+    written: list[Path] = []
+    if run.predictions.empty:  # task runs (E5-E8) save their own figures
+        return written
     for variant, rows in run.predictions.groupby("variant", sort=False):
         curves = {
             model: (part["label"].to_numpy(), part["score"].to_numpy())

@@ -3,6 +3,7 @@
 # would also hide the code folders src/cvx/data/ and tests/data/.
 /data/
 /runs/
+/runs_check/
 /app/model_store/
 /app/data/
 # Streamlit secrets file, in case one is ever created (CLAUDE.md rule 12).

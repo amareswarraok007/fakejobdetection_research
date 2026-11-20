@@ -1,0 +1,23 @@
+# E5 — Explanations (PRD Section 8.2). Works on the models exported from E4:
+#   python scripts/export_model.py --run <e4 run> --models lr_text,lr_full,xgb_text,xgb_full --out app/model_store
+experiment_id: e5_explain
+extends: base.yaml            # same corrected split as E4 (checked against the model card)
+task: explain
+
+xai:
+  model_store: app/model_store
+  models: [lr_text, lr_full, xgb_text, xgb_full]
+  n_check: 20                 # PRD: linear SHAP vs LinearExplainer on 20 postings
+  n_examples: 10
+  n_global: 1000
+  top_global: 30
+  lime_samples: 1000
+  lime_features: 20
+
+assumptions:
+  - "Models are the exact E4 models exported to the model store and loaded only after the SHA-256, version and smoke checks."
+  - "Linear SHAP: phi = w * (x - training mean), log-odds; checked against shap.LinearExplainer given the full training mean as background (its default would subsample 100 rows)."
+  - "Tree SHAP: shap.TreeExplainer on the XGBoost margin; additivity checked within 1e-4."
+  - "Global ranking: mean |SHAP| over the first 1,000 test postings (memory), top 30 saved."
+  - "Per-word scores: a two-word phrase's SHAP value is split equally between its words; only words present in the posting are listed."
+  - "LIME: LimeTextExplainer, bow=True (removing a word removes every occurrence), 1,000 samples, seed 42; metadata fixed except counts recomputed from the edited text (log_text_length, n_url, n_email, n_phone)."

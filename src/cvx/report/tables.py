@@ -163,8 +163,23 @@ def reported_vs_realistic_tables(metrics: dict[str, Any]) -> str:
     )
 
 
+def task_markdown(experiment_id: str, run: RunData) -> str:
+    """Tables for a task experiment (E5-E8), headed by its source run."""
+    from cvx.report.task_tables import TASK_TABLES
+
+    git = run.env.get("git", {})
+    parts = [
+        f"# {experiment_id}",
+        f"Source: `{run.path.parent.name}/{run.path.name}` · git `{git.get('commit', 'unknown')}`",
+        *TASK_TABLES[run.metrics["task"]](run.metrics),
+    ]
+    return "\n\n".join(parts) + "\n"
+
+
 def experiment_markdown(experiment_id: str, run: RunData) -> str:
     """All tables for one experiment, headed by the run folder they came from."""
+    if run.metrics.get("task", "train") != "train":
+        return task_markdown(experiment_id, run)
     metrics, git = run.metrics, run.env.get("git", {})
     parts = [
         f"# {experiment_id}",

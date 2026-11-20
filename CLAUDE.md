@@ -68,7 +68,7 @@ src/cvx/        the package: config, run, data/, features/, models/, evaluate/,
                 explain/, xai_eval/, audit/, rules/, artifacts/, schema.py,
                 service.py (the only functions the app calls; PRD §11.6)
 notebooks/      colab_runner.ipynb only (thin: clone, install, mount Drive, run configs)
-scripts/        make_tables.py, make_figures.py, export_model.py
+scripts/        make_tables.py, make_figures.py, export_model.py, compare_runs.py
 app/            Streamlit app (main.py, pages/1_About.py, model_store/); no ML logic, no database
 .streamlit/     config.toml (localhost only, usage stats off, error details hidden)
 runs/           experiment outputs (gitignored)

@@ -1,0 +1,16 @@
+# Streamlit settings for the CVX app (PRD §11.7). Run from the repository root:
+#   streamlit run app/main.py
+
+[server]
+# Listen on this laptop only, so nobody else on the network can open the app.
+address = "localhost"
+headless = true
+
+[browser]
+# Streamlit sends usage statistics by default; the app must work offline and keep data local.
+gatherUsageStats = false
+
+[client]
+# Hide Python error details from the page ("none" shows only a generic error).
+showErrorDetails = "none"
+toolbarMode = "minimal"

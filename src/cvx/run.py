@@ -35,6 +35,7 @@ from cvx.models.train import (
     train_val_fold,
 )
 from cvx.models.zoo import candidates, grid_for
+from cvx.tasks import run_task
 
 logger = logging.getLogger(__name__)
 CV_COLUMNS = ["variant", "model", "params", "fold", "scoring", "score"]
@@ -77,7 +78,13 @@ class _DataCache:
 
     def _input_key(self, config: Config) -> tuple[Any, ...]:
         """Settings that decide the model input table."""
-        return (split_key(config), config.preprocessing, config.features.metadata)
+        features = config.features
+        return (
+            split_key(config),
+            config.preprocessing,
+            features.metadata,
+            tuple(features.extra_categories),
+        )
 
     def get(self, config: Config) -> ModelData:
         """Model data for ``config`` (before-split resampling applied, if any)."""
@@ -113,7 +120,12 @@ def run_model(
     grid_candidates = candidates(grid_for(model_id, config.grids))
     train_val, cv = folds
     trained = train_model(
-        model_id, make_head_factory(model_id, config), grid_candidates, cv, train_val, config.tuning
+        model_id,
+        make_head_factory(model_id, config),
+        grid_candidates,
+        cv,
+        train_val,
+        config.tuning.for_model(model_id),
     )
     thresholds = resolve_thresholds(config.thresholds or [0.5], trained.thresholds)
     test = data.split.test
@@ -125,7 +137,7 @@ def run_model(
     )
     result = {
         "best_params": trained.best_params,
-        "tuning": {**vars(config.tuning), "best_score": trained.best_score},
+        "tuning": {**vars(config.tuning.for_model(model_id)), "best_score": trained.best_score},
         "chosen_thresholds": trained.thresholds,
         "fit_seconds": trained.seconds,
         "validation": evaluate_scores(data.y[data.split.val], trained.val_scores, thresholds),
@@ -157,8 +169,10 @@ def run_variant(
     """Run every model of one variant and add its results to ``out``."""
     logger.info("Variant %s", name)
     data = cache.get(config)
-    need_cv = config.tuning.method == "grouped_cv" and any(
-        len(candidates(grid_for(m, config.grids))) > 1 for m in config.models
+    need_cv = any(
+        config.tuning.for_model(m).method == "grouped_cv"
+        and len(candidates(grid_for(m, config.grids))) > 1
+        for m in config.models
     )
     folds = cache.get_folds(config, data, need_cv)
     summary = _variant_summary(config, data)
@@ -262,12 +276,25 @@ def reported_vs_realistic(reference: str, out: Collected) -> list[dict[str, Any]
     return rows
 
 
+def run_training(config: Config, postings: pd.DataFrame, run_dir: Path) -> dict[str, Any]:
+    """E0-E4: every variant and model; writes cv_results.csv and predictions.csv."""
+    cache, out = _DataCache(postings), Collected()
+    for name, variant_config in expand_variants(config):
+        run_variant(name, variant_config, cache, run_dir, out)
+    metrics: dict[str, Any] = {"variants": out.variants, "mcnemar": mcnemar_tests(config, out)}
+    if config.compare_to:
+        metrics["reported_vs_realistic"] = reported_vs_realistic(config.compare_to, out)
+    runio.write_csv(run_dir / "cv_results.csv", out.cv_rows, CV_COLUMNS)
+    runio.write_csv(run_dir / "predictions.csv", out.predictions, PREDICTION_COLUMNS)
+    return metrics
+
+
 def run_experiment(
     config_path: str | Path, data_path: str | Path | None = None, runs_dir: str | Path | None = None
 ) -> Path:
-    """Run every variant and model of one config and write a complete run folder."""
+    """Run one config (training E0-E4, or a task E5-E8) and write a complete run folder."""
     config = load_config(config_path)
-    if not config.models:
+    if config.task == "train" and not config.models:
         raise ValueError(f"{config_path} lists no models; nothing to run.")
     data_file = Path(data_path or config.paths.data_csv)
     run_dir = runio.create_run_dir(runs_dir or config.paths.runs_dir, config.experiment_id)
@@ -275,20 +302,18 @@ def run_experiment(
     try:
         runio.write_config(run_dir, config)
         env = runio.start_env(run_dir, config, data_file)
-        cache, out = _DataCache(load_postings(data_file)), Collected()
-        for name, variant_config in expand_variants(config):
-            run_variant(name, variant_config, cache, run_dir, out)
-        metrics: dict[str, Any] = {
+        postings = load_postings(data_file)
+        if config.task == "train":
+            results = run_training(config, postings, run_dir)
+        else:
+            results = run_task(config, postings, data_file, run_dir)
+        metrics = {
             "experiment_id": config.experiment_id,
             "run_id": run_dir.name,
-            "variants": out.variants,
-            "mcnemar": mcnemar_tests(config, out),
+            "task": config.task,
+            **results,
         }
-        if config.compare_to:
-            metrics["reported_vs_realistic"] = reported_vs_realistic(config.compare_to, out)
         runio.write_json(run_dir / "metrics.json", metrics)
-        runio.write_csv(run_dir / "cv_results.csv", out.cv_rows, CV_COLUMNS)
-        runio.write_csv(run_dir / "predictions.csv", out.predictions, PREDICTION_COLUMNS)
         runio.finish_env(run_dir, env)
         logger.info("Run complete: %s", run_dir)
     finally:

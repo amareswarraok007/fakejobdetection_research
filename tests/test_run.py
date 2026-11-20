@@ -93,3 +93,23 @@ def test_config_without_models_is_rejected(tmp_path: Path) -> None:
     repo = Path(__file__).resolve().parents[1]
     with pytest.raises(ValueError, match="no models"):
         run_experiment(repo / "configs" / "base.yaml", runs_dir=tmp_path)
+
+
+def test_xgb_override_tunes_on_validation(tiny_runs: dict[str, Any], tmp_path: Path) -> None:
+    import yaml
+
+    from cvx.run import run_experiment
+
+    config = yaml.safe_load((tiny_runs["runs"]["e3_models"] / "config.yaml").read_text("utf-8"))
+    config.update(models=["lr", "xgb"], export_models=False)
+    config["tuning"]["overrides"] = {"xgb": "validation"}
+    config["stats"] = {"bootstrap": None, "mcnemar": []}
+    path = tmp_path / "override.yaml"
+    path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    run_dir = run_experiment(path, tiny_runs["data"], tmp_path / "runs")
+    models = runio.read_json(run_dir / "metrics.json")["variants"]["main"]["models"]
+    assert models["xgb"]["tuning"]["method"] == "validation"
+    assert models["lr"]["tuning"]["method"] == "grouped_cv"
+    with (run_dir / "cv_results.csv").open(encoding="utf-8") as handle:
+        folds = {(row["model"], row["fold"]) for row in csv.DictReader(handle)}
+    assert ("xgb", "val") in folds and ("lr", "0") in folds

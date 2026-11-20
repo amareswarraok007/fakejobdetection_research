@@ -67,7 +67,9 @@ def make_split_plan(df: pd.DataFrame, config: Config) -> SplitPlan:
     if s.method == "random_stratified":
         postings = df.reset_index(drop=True)
         y = postings[LABEL_COLUMN].to_numpy()
-        return SplitPlan(postings, split.random_stratified_split(y, tuple(s.ratios), config.seed), None)
+        return SplitPlan(
+            postings, split.random_stratified_split(y, tuple(s.ratios), config.seed), None
+        )
     postings, n_removed = dedup.drop_exact_duplicates(df)
     postings = postings.reset_index(drop=True)
     logger.info("Removed %d exact duplicates", n_removed)
@@ -80,7 +82,12 @@ def make_split_plan(df: pd.DataFrame, config: Config) -> SplitPlan:
 
 def make_model_data(plan: SplitPlan, config: Config) -> ModelData:
     """Model input for ``plan.postings`` with the config's preprocessing and features."""
-    X = make_model_input(plan.postings, config.preprocessing, config.features.metadata)
+    X = make_model_input(
+        plan.postings,
+        config.preprocessing,
+        config.features.metadata,
+        tuple(config.features.extra_categories),
+    )
     return ModelData(
         X=X.reset_index(drop=True),
         y=plan.postings[LABEL_COLUMN].to_numpy().astype(int),

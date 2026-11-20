@@ -74,6 +74,11 @@ def _nltk_tools() -> tuple[frozenset[str], Callable[[str], str]]:
     return stop_words, lru_cache(maxsize=None)(lemmatizer.lemmatize)
 
 
+def stop_words() -> frozenset[str]:
+    """NLTK's English stop-word list (used by P-CV and by the shortcut audit)."""
+    return _nltk_tools()[0]
+
+
 def clean_text_p_cv(text: object) -> str:
     """Clean one text value the Career Verify way.
 
