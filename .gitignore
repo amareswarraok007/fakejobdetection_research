@@ -3,6 +3,8 @@ data/
 runs/
 app/model_store/
 app/data/
+# Streamlit secrets file, in case one is ever created (CLAUDE.md rule 12).
+.streamlit/secrets.toml
 
 # Python
 __pycache__/

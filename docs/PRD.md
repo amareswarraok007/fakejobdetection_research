@@ -50,7 +50,7 @@ Short name used in code and this document: **CVX**.
 
 This is the proposal-stage abstract. It is written in the future tense and states no results. After the experiments, replace the last two sentences with the measured numbers from `reports/`.
 
-> Fake job and internship postings cause financial loss and identity theft, especially among students and fresh graduates. Career Verify (IEEE AIDE 2026) detects such postings with TF-IDF features and Logistic Regression and reports 97% accuracy on the Employment Scam Aegean Dataset (EMSCAD; 17,880 postings, 866 fraudulent). However, its reported confusion matrix is inconsistent with the dataset's class balance, it uses only text fields, it reports accuracy as its main measure, and it offers no per-posting explanation. This project will first reproduce Career Verify, then re-evaluate it under a leakage-aware protocol that removes duplicate postings before stratified splitting and reports fraud-class F1, PR-AUC and confidence intervals. It will extend the detector with metadata features and an XGBoost model, and explain every prediction with SHAP and LIME, translated into plain-English reasons and complemented by rule-based safety checks for payment and personal-data requests. Unlike prior work that only displays explanations, the project will measure whether they are faithful, using comprehensiveness, sufficiency and AOPC against a random-word baseline, together with SHAP–LIME agreement and LIME stability. SHAP will also be used to audit the model for shortcut features. The complete system will be delivered as a reproducible pipeline and a Flask web application. We expect to show how much evaluation choices change reported performance, and which explanation method better reflects the model's real decisions.
+> Fake job and internship postings cause financial loss and identity theft, especially among students and fresh graduates. Career Verify (IEEE AIDE 2026) detects such postings with TF-IDF features and Logistic Regression and reports 97% accuracy on the Employment Scam Aegean Dataset (EMSCAD; 17,880 postings, 866 fraudulent). However, its reported confusion matrix is inconsistent with the dataset's class balance, it uses only text fields, it reports accuracy as its main measure, and it offers no per-posting explanation. This project will first reproduce Career Verify, then re-evaluate it under a leakage-aware protocol that removes duplicate postings before stratified splitting and reports fraud-class F1, PR-AUC and confidence intervals. It will extend the detector with metadata features and an XGBoost model, and explain every prediction with SHAP and LIME, translated into plain-English reasons and complemented by rule-based safety checks for payment and personal-data requests. Unlike prior work that only displays explanations, the project will measure whether they are faithful, using comprehensiveness, sufficiency and AOPC against a random-word baseline, together with SHAP–LIME agreement and LIME stability. SHAP will also be used to audit the model for shortcut features. The complete system will be delivered as a reproducible pipeline and a Streamlit web application. We expect to show how much evaluation choices change reported performance, and which explanation method better reflects the model's real decisions.
 
 **Keywords:** fake job detection, online recruitment fraud, explainable AI, SHAP, LIME, explanation faithfulness, data leakage, TF-IDF, XGBoost.
 
@@ -252,7 +252,7 @@ System metrics: prediction latency, explanation latency and a successful startup
 
 ## 7. Proposed methodology
 
-The method runs two tracks on the same data: a baseline track that reproduces Career Verify exactly, and a CVX track with the corrected protocol and stronger features. Both feed one evaluation. The explainability track then explains the CVX models and tests those explanations, and the final models are deployed in a Flask app.
+The method runs two tracks on the same data: a baseline track that reproduces Career Verify exactly, and a CVX track with the corrected protocol and stronger features. Both feed one evaluation. The explainability track then explains the CVX models and tests those explanations, and the final models are deployed in a Streamlit app.
 
 &#91;embedded content: proposed methodology · baseline track, CVX track, explainability track, deployment\]
 
@@ -263,7 +263,7 @@ The method runs two tracks on the same data: a baseline track that reproduces Ca
 3. **Phase 2 — CVX track (E2–E4).** P-CVX preprocessing, duplicate removal and grouped stratified split, TF-IDF plus metadata features, five models tuned by grouped cross-validation, thresholds chosen on validation.
 4. **Phase 3 — Evaluation and comparison.** Fraud-class F1, PR-AUC, confidence intervals and McNemar's test; one table showing Career Verify reported vs reproduced vs corrected vs CVX best.
 5. **Phase 4 — Explainability (E5–E7).** Exact linear SHAP for LR, TreeExplainer for XGBoost and LIME for both; plain-English reasons; faithfulness, agreement and stability tests; shortcut audit and error analysis.
-6. **Phase 5 — Deployment.** Export the chosen models with a model card, load them safely in the Flask app, add safety rules and risk levels (Section 11).
+6. **Phase 5 — Deployment.** Export the chosen models with a model card, load them safely in the Streamlit app, add safety rules and risk levels (Section 11).
 7. **Phase 6 — Reporting.** Generate every table and figure from run folders; write the report and paper.
 
 ### 7.2 Metadata features (CVX track)
@@ -349,7 +349,7 @@ The plan takes 10 weeks of part-time work, with three review points with the gui
 | 4 | Ablations | E4; choose the final model and thresholds | **Review 1: baseline and corrected results** | M3 |
 | 5 | Explanation code | SHAP, LIME, reasons and faithfulness modules with tests (E5) | Explanation module; unit tests pass | M4 |
 | 6 | XAI evaluation | Run E6 in Colab; run E7 audit and error analysis | E6 and E7 results | M5 |
-| 7 | Web app core | Startup checks, Analyze and Result pages with SHAP, rules, risk level, history | Working app | M6 |
+| 7 | Web app core | Model-loading checks, Analyze page with its result (SHAP, rules, risk level), history | Working app | M6 |
 | 8 | Web app complete | LIME on demand, Model and About pages, E8 rule hit rates | **Review 2: demo and XAI results** | M7 |
 | 9 | Reporting | Auto-generated result tables and figures; write report chapters | Draft report | M8 |
 | 10 | Buffer and finish | Fix review comments; paper draft; slides | **Review 3: final report, paper draft, demo** | — |
@@ -375,6 +375,8 @@ careerverify-xai/
 ├── CLAUDE.md                 # agent rules (Claude Code)
 ├── AGENTS.md                 # identical copy (Antigravity / Gemini)
 ├── README.md
+├── .streamlit/
+│   └── config.toml           # localhost only, usage statistics off, error details hidden
 ├── pyproject.toml            # package "cvx", installed with: pip install -e .
 ├── requirements.in           # top-level dependencies, no versions
 ├── requirements-lock.txt     # exact versions frozen from Colab (Section 10.5)
@@ -404,14 +406,15 @@ careerverify-xai/
 │   ├── audit/     shortcuts.py, errors.py
 │   ├── rules/     safety.py (R1-R7)
 │   ├── artifacts/ save.py, load.py (hash, version, smoke checks)
-│   └── schema.py             # build_input(form) -> DataFrame for the app
+│   ├── schema.py             # build_input(form) -> DataFrame for the app
+│   └── service.py            # analyze(), lime_compare(), health(): what the app calls
 ├── notebooks/
 │   └── colab_runner.ipynb    # thin: clone, install, mount Drive, run configs
 ├── scripts/   make_tables.py, make_figures.py, export_model.py
 ├── app/
-│   ├── main.py               # Flask app factory
-│   ├── routes.py, db.py
-│   ├── templates/, static/   # local CSS/JS, Chart.js copy, no CDN
+│   ├── main.py               # Streamlit entry point: Analyze page (st.form + result)
+│   ├── pages/                # 1_History.py, 2_Model.py, 3_Baseline.py, 4_About.py
+│   ├── db.py                 # SQLite history (app/data/cvx.db)
 │   └── model_store/          # exported model files (gitignored)
 ├── runs/                     # experiment outputs (gitignored, synced from Drive)
 ├── reports/                  # generated tables and figures (committed)
@@ -441,7 +444,7 @@ stats: {bootstrap: 1000, mcnemar: [lr, xgb]}
 ### 10.5 Colab workflow
 
 1. Open `notebooks/colab_runner.ipynb` in Colab Pro. Cell 1 clones the repo, mounts Drive and prints Python and library versions.
-2. First time only: the owner runs `pip freeze` in Colab and commits the result as `requirements-lock.txt`. From then on, Colab and the laptop both install exactly that file, and the laptop uses the same Python minor version.
+2. First time only: the owner runs the lock-file cell from the README in Colab. It installs `requirements.in` and writes `requirements-lock.txt` with exact versions of only the packages in `requirements.in` plus numpy, scipy, joblib and threadpoolctl (no Colab or NVIDIA packages, because Colab is Linux and the laptop is Windows). The owner commits that file. From then on, Colab and the laptop both install exactly that file, and both use Python 3.13.
 3. Cell 2 installs the lock file and the package (`pip install -e .`). Later cells each run one config, writing to `MyDrive/cvx/runs/`.
 4. The owner downloads the run folders into `runs/` locally, then runs `scripts/make_tables.py` and `scripts/make_figures.py`.
 5. A CPU runtime is enough for every experiment; a GPU is not needed.
@@ -459,7 +462,7 @@ stats: {bootstrap: 1000, mcnemar: [lr, xgb]}
 | `model_card.json` | Per model: SHA-256 of each file, `t_f1`, `t_r90`, test metrics copied from the run, `input_columns`, library versions, dataset hash, seed, git commit |
 | `smoke_samples.json` | 5 fixed postings with each model's exact score from the training run |
 
-At startup the app (1) loads only files listed in `model_card.json`, (2) checks each SHA-256, (3) refuses to start if the scikit-learn, XGBoost or NumPy major or minor version differs, and (4) re-scores the smoke samples and refuses to start if any score differs by more than 1e-6. Never load a .pkl from the internet or another repository, because loading a pickle can run code.
+The app loads its models once per process, in a function cached with `st.cache_resource`. That function (1) loads only files listed in `model_card.json`, (2) checks each SHA-256, (3) refuses if the scikit-learn, XGBoost or NumPy major or minor version differs, and (4) re-scores the smoke samples and refuses if any score differs by more than 1e-6. "Refuses" means every page shows the error with `st.error` and calls `st.stop()`, so no prediction is ever made with a model that failed a check. Never load a .pkl from the internet or another repository, because loading a pickle can run code.
 
 ### 10.7 Tech stack
 
@@ -470,7 +473,7 @@ At startup the app (1) loads only files listed in `model_card.json`, (2) checks 
 | Explainability | shap, lime |
 | Statistics and plots | scipy.stats, matplotlib |
 | Config | PyYAML with dataclasses |
-| Web | Flask, Jinja2, Flask-WTF, Chart.js (local copy), SQLite |
+| Web | Streamlit (`st.form` for input, `st.pyplot` for matplotlib charts, `st.cache_resource` for model loading, `st.session_state` for the latest result), SQLite (Python's built-in `sqlite3`) |
 | Testing and quality | pytest, ruff |
 | Compute | Google Colab Pro (CPU runtime), Google Drive |
 
@@ -480,24 +483,31 @@ Exact versions come only from `requirements-lock.txt`; the agent never picks ver
 
 > **Web app: Streamlit (changed from Flask on 20 Nov 2026)**
 
-The app is a local Flask website, the same kind of deployment as Career Verify, so the two can be compared directly. A user pastes a posting and gets a score, a risk level, highlighted words, plain-English reasons, separate rule-based safety warnings and an optional LIME comparison. Every number shown comes from the model or from `reports/`.
+The app is a local Streamlit website that runs on the laptop with `streamlit run app/main.py`. Career Verify uses a local Flask website; both are local web apps on a normal laptop, so the deployment setting is comparable. A user pastes a posting and gets a score, a risk level, highlighted words, plain-English reasons, separate rule-based safety warnings and an optional LIME comparison. Every number shown comes from the model or from `reports/`.
+
+The app files contain no ML logic. They call `src/cvx/service.py` (11.6), which calls the rest of the `cvx` package.
 
 ### 11.1 Pages
 
-| Page | Route | Shows |
+Streamlit lists the pages in the sidebar; there are no URL routes to design. Streamlit re-runs the page script after every click, so the latest analysis is kept in `st.session_state` and stays on screen until the next one.
+
+| Page | File | Shows |
 | --- | --- | --- |
-| Analyze | `/` | Input form (11.2) |
-| Result | `/result/<id>` | Score, risk level, reasons, highlighted text, top-10 SHAP chart, safety checks, "Explain with LIME" button |
-| History | `/history` | Past analyses with View and Delete |
-| Model and evaluation | `/model` | Model card, test metrics, global SHAP chart and faithfulness summary, read from `model_card.json` and `reports/` |
-| Compare with Career Verify | `/baseline` | The E0 reproduction and E2 corrected results side by side, read from `reports/` |
-| About | `/about` | What the tool can and cannot do, dataset age, the "not proof" warning |
+| Analyze | `app/main.py` | Input form (11.2) built with `st.form`. After submit, on the same page: score, risk level, reasons, highlighted text, top-10 SHAP chart (`st.pyplot`), safety checks, and an "Explain with LIME" button outside the form |
+| History | `app/pages/1_History.py` | Past analyses from SQLite, each with View and Delete buttons |
+| Model and evaluation | `app/pages/2_Model.py` | Model card, test metrics, global SHAP chart and faithfulness summary, read from `model_card.json` and `reports/` |
+| Compare with Career Verify | `app/pages/3_Baseline.py` | The E0 reproduction and E2 corrected results side by side, read from `reports/` |
+| About | `app/pages/4_About.py` | What the tool can and cannot do, dataset age, the "not proof" warning |
+
+Every page's sidebar has a "System check" box showing the result of `service.health()`: loaded models, library versions and the smoke-check result.
 
 ### 11.2 Input modes
 
 1. **Full posting:** title\*, company name, company description, description\*, requirements, benefits, salary range; dropdowns for employment type, experience, education and function (each with Unknown); yes/no for logo, screening questions and remote. Uses the text + metadata model.
 2. **Text only:** one large box for a message from WhatsApp, email and so on. Uses the text-only model.
-3. Both modes have optional recruiter email and company website fields (rules only), a model choice (Auto, LR, XGBoost) and a "Don't save" checkbox. Maximum 20,000 characters. Fields marked \* are required.
+3. Both modes have optional recruiter email and company website fields (rules only), a model choice (Auto, LR, XGBoost) and a "Don't save" checkbox. Maximum 20,000 characters. Fields marked \* are required; they are checked after submit and a missing one is shown with `st.error`.
+
+The mode is chosen with a radio button above the form. Widgets inside an `st.form` do not update the page until the form is submitted, so a mode switch inside the form would not change which fields are shown.
 
 ### 11.3 Safety rules (not machine learning)
 
@@ -526,27 +536,36 @@ Example display: "Model: Medium · Safety rules: High (asks for a registration f
 
 ### 11.5 Result details
 
-- **Highlighting:** red for words pushing towards fake, green towards genuine, strength by absolute SHAP value. Each highlight also has a +/− sign and a tooltip, so colour is never the only signal.
+- **Highlighting:** red for words pushing towards fake, green towards genuine, strength by absolute SHAP value. Each highlight also has a +/− sign and a tooltip, so colour is never the only signal. The highlighted HTML is built by `cvx.explain.highlight` from text escaped with `html.escape`, then shown with `st.markdown(..., unsafe_allow_html=True)`.
 - **Reasons:** templates filled from the top-5 SHAP features, for example "The phrase ‘registration fee’ appears much more often in fake postings in the training data" or "The posting has no company logo".
-- **LIME:** runs only when the button is clicked (`num_samples=1000`), shows its top-10 words next to SHAP's, with their top-5 Jaccard overlap.
+- **LIME:** runs only when the button is clicked (`num_samples=1000`), inside `st.spinner`, and shows its top-10 words next to SHAP's, with their top-5 Jaccard overlap. It uses the input kept in `st.session_state`, so it also works when "Don't save" is ticked.
 - **Fixed caution:** "These reasons show what the model learned from older public job postings. They are not proof. Verify the company yourself."
 
-### 11.6 API and storage
+### 11.6 App functions and storage
 
-| Method | Route | Returns |
+There is no HTTP API. The pages call three plain Python functions in `src/cvx/service.py`. They do not import Streamlit, so they can be tested directly with pytest.
+
+| Function | Returns | Called by |
 | --- | --- | --- |
-| POST | `/api/predict` | Score, label, thresholds, SHAP list, highlights, reasons, rules, risk level, `history_id` |
-| POST | `/api/lime` | LIME words and top-5 Jaccard with SHAP for a `history_id` |
-| GET | `/api/health` | Loaded models, versions, smoke-check result |
+| `analyze(form, mode, model_choice, models)` | Score, label, thresholds, SHAP list, highlights, reasons, rules, risk level | Analyze page, on form submit |
+| `lime_compare(form, mode, model_id, shap_words, models)` | LIME top-10 words and top-5 Jaccard with SHAP | "Explain with LIME" button |
+| `health(models)` | Loaded models, versions, smoke-check result | Sidebar "System check" on every page |
 
-SQLite file `app/data/cvx.db`, table `analyses` (id, created\_at, mode, model\_id, input\_json, score, label, risk\_level, explanation\_json). Data never leaves the laptop.
+`models` is the object returned by the cached loading function (Section 10.6).
+
+SQLite file `app/data/cvx.db`, table `analyses` (id, created\_at, mode, model\_id, input\_json, score, label, risk\_level, explanation\_json). An analysis is saved only when "Don't save" is not ticked. Data never leaves the laptop.
 
 ### 11.7 Non-functional requirements
 
-- SHAP result under 2 seconds and LIME under 15 seconds on a normal laptop CPU.
-- Works offline: no CDN links.
-- Security: Jinja auto-escaping, CSRF protection, secret key from the `CVX_SECRET` environment variable, debug off unless `FLASK_DEBUG=1`, posting text never written to logs.
-- Accessibility: labelled inputs, keyboard navigation, WCAG AA colour contrast.
+- SHAP result under 2 seconds and LIME under 15 seconds on a normal laptop CPU. Models are loaded once per process (`st.cache_resource`), so these times do not include loading.
+- Works offline: Streamlit serves its own front-end files from the laptop; no external links, fonts or CDNs. Usage statistics are off (`browser.gatherUsageStats = false` in `.streamlit/config.toml`).
+- Security:
+  - Posting text is passed through `html.escape` before any output that uses `unsafe_allow_html=True`. This replaces the template auto-escaping a Flask app would have.
+  - The server listens on localhost only (`server.address = "localhost"`).
+  - Python error details are hidden from the page (`client.showErrorDetails`).
+  - The app needs no secret. If one is ever added, it comes from an environment variable (for example `CVX_SECRET`), never from code.
+  - Posting text is never written to logs.
+- Accessibility: every widget has a label, keyboard navigation works, colours meet WCAG AA contrast, and every `st.pyplot` chart is followed by the same numbers in a table, because screen readers cannot read chart images.
 
 ## 12. Milestones and acceptance criteria
 
@@ -559,7 +578,7 @@ The agent builds eight milestones in order and stops after each for the owner to
 | M3 | E2–E4 configs, statistics, table and figure scripts | E2–E4 in Colab | 3–4 |
 | M4 | Explanation module (E5) | pytest; E5 in Colab | 5 |
 | M5 | Faithfulness, agreement, stability, audit (E6, E7) | E6, E7 in Colab | 6 |
-| M6 | Model export, safe loading, Flask core, safety rules | App on laptop | 7 |
+| M6 | Model export, safe loading, Streamlit core, safety rules | App on laptop | 7 |
 | M7 | LIME in app, Model, Baseline and About pages, E8 | App; E8 in Colab | 8 |
 | M8 | Reports, README, reproducibility check | Fresh-clone test | 9 |
 
@@ -602,16 +621,17 @@ The agent builds eight milestones in order and stops after each for the owner to
 ### M6 — App core
 
 - [ ] `export_model.py` produces every file in Section 10.6
-- [ ] Startup refuses on a hash, version or smoke-score mismatch, and `/api/health` reports the check
-- [ ] Analyze → Result works in both input modes with score, risk level, reasons, highlights, SHAP chart and safety checks
+- [ ] The cached model loader (`st.cache_resource`) refuses on a hash, version or smoke-score mismatch: the app shows the error and stops (`st.stop()`); `service.health()` reports the check in the sidebar
+- [ ] The Analyze page works in both input modes: submitting the `st.form` shows score, risk level, reasons, highlights, SHAP chart (`st.pyplot`) and safety checks, and the result stays on screen across reruns (`st.session_state`)
+- [ ] `.streamlit/config.toml` sets localhost only, usage statistics off and error details hidden
 - [ ] Rules R1–R7 each have a test that fires and one that does not
-- [ ] SHAP result under 2 seconds; app tests use a tiny model trained inside the test, never real results
+- [ ] SHAP result under 2 seconds; `service.py` is tested directly with pytest and the Analyze page with Streamlit's `AppTest`; app tests use a tiny model trained inside the test, never real results
 
 ### M7 — App complete
 
-- [ ] LIME button works under 15 seconds with a spinner and SHAP comparison
-- [ ] Model and Baseline pages read numbers only from `model_card.json` and `reports/`
-- [ ] Works offline; keyboard and screen-reader basics checked
+- [ ] LIME button works under 15 seconds with `st.spinner` and the SHAP comparison, including when "Don't save" is ticked
+- [ ] History, Model, Baseline and About pages exist in `app/pages/`; Model and Baseline pages read numbers only from `model_card.json` and `reports/`
+- [ ] Works offline; keyboard and screen-reader basics checked; every chart has a matching table
 - [ ] E8 rule hit rates written to `reports/`
 
 ### M8 — Reporting and reproducibility

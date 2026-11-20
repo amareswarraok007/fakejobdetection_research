@@ -1,8 +1,8 @@
 # Top-level libraries for CareerVerify-XAI. NO versions here.
 # Exact versions live only in requirements-lock.txt, which the owner creates
-# in Colab (PRD Section 10.5):
-#     pip install -r requirements.in
-#     pip freeze > requirements-lock.txt
+# in Colab with the lock-file cell in README.md (PRD Section 10.5). That cell
+# pins only the packages below plus numpy, scipy, joblib and threadpoolctl.
+# One package name per line; comments start with "#".
 
 # data and ML
 pandas

@@ -65,10 +65,12 @@ streamlit run app/main.py
 ```text
 configs/        one YAML per experiment (base.yaml + e0..e8)
 src/cvx/        the package: config, run, data/, features/, models/, evaluate/,
-                explain/, xai_eval/, audit/, rules/, artifacts/, schema.py
+                explain/, xai_eval/, audit/, rules/, artifacts/, schema.py,
+                service.py (the only functions the app calls; PRD §11.6)
 notebooks/      colab_runner.ipynb only (thin: clone, install, mount Drive, run configs)
 scripts/        make_tables.py, make_figures.py, export_model.py
-app/            Streamlit app (main.py, db.py, model_store/); exact files decided in M6
+app/            Streamlit app (main.py, pages/, db.py, model_store/); no ML logic
+.streamlit/     config.toml (localhost only, usage stats off, error details hidden)
 runs/           experiment outputs (gitignored)
 reports/        generated tables and figures (committed)
 data/           raw CSV (gitignored)
