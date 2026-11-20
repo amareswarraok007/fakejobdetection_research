@@ -6,7 +6,7 @@ tuning: {method: grouped_cv, cv_folds: 5, scoring: average_precision}   # one ca
 
 xai:
   model_store: app/model_store
-  models: [lr_text, xgb_text]
+  models: [lr_text]
   audit_columns: [location, industry]   # E7a
   mask_tokens: []                       # E7b: add tokens here after reviewing the E5 top-30
   top_global: 30

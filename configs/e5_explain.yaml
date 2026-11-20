@@ -6,7 +6,7 @@ task: explain
 
 xai:
   model_store: app/model_store
-  models: [lr_text, lr_full, xgb_text, xgb_full]
+  models: [lr_text, lr_full]
   n_check: 20                 # PRD: linear SHAP vs LinearExplainer on 20 postings
   n_examples: 10
   n_global: 1000
