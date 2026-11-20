@@ -294,7 +294,7 @@ Nine experiments, E0–E8, each answer one research question and write their res
 | ID | Name | Answers | Main output |
 | --- | --- | --- | --- |
 | E0 | Reproduce Career Verify | RQ1 | Metrics and confusion matrix next to the paper's reported numbers |
-| E1 | Leakage test: oversampling before splitting | RQ1 | Test-set fake share and metrics vs E0 |
+| E1 | Leakage test: oversampling before splitting (E1a, E1b) vs inside training only (E1c) | RQ1 | Test-set fake share; reported (E1a/E1b) vs realistic (E1c) PR-AUC, ROC-AUC and fake-class recall |
 | E2 | Leakage-aware protocol | RQ2 | Metrics with duplicates removed and grouped split |
 | E3 | Model comparison | RQ3 | NB, linear SVM, RF, LR, XGBoost table |
 | E4 | Feature and imbalance ablations | RQ3 | Text-only vs text + metadata; class weights vs SMOTE |
@@ -305,19 +305,19 @@ Nine experiments, E0–E8, each answer one research question and write their res
 
 ### 8.2 Details
 
-**E0 — Reproduce Career Verify.** Preprocessing P-CV, TF-IDF with scikit-learn defaults, Logistic Regression (L2, `class_weight='balanced'`, C tuned on validation from {0.01, 0.1, 1, 10}), stratified random 80/10/10 split. Report every metric and the confusion matrix beside the paper's reported values, and list every setting the paper did not specify and the value chosen.
+**E0 — Reproduce Career Verify.** Preprocessing P-CV, TF-IDF with scikit-learn defaults, Logistic Regression (L2, `class_weight='balanced'`, C tuned on validation from {0.1, 1, 10}; speed mode §9.1, originally {0.01, 0.1, 1, 10}), stratified random 80/10/10 split. Report every metric and the confusion matrix beside the paper's reported values, and list every setting the paper did not specify and the value chosen.
 
-**E1 — Leakage test.** Same as E0, but balance the whole dataset before splitting: E1a with random oversampling, E1b with SMOTE. Report the test-set fake share and all metrics. If metrics jump towards the paper's numbers, that supports the leakage explanation for L1. Report it as a likely cause, not as proof.
+**E1 — Leakage test.** Same as E0, but balance the whole dataset before splitting: E1a with random oversampling, E1b with SMOTE (TF-IDF is fitted on all postings first, because SMOTE needs numbers). E1c is the correct control: the E0 split, with random oversampling inside the training split only, so validation and test keep their natural prevalence. Report the test-set fake share and all metrics, and label E1a/E1b vs E1c as **reported vs realistic performance**, not as pure leakage, because the test prevalence differs (about half fake in E1a/E1b, the natural rate in E1c). For this comparison report PR-AUC, ROC-AUC and fake-class recall, and the differences E1a − E1c and E1b − E1c. If metrics jump towards the paper's numbers, that supports the leakage explanation for L1. Report it as a likely cause, not as proof.
 
 **E2 — Leakage-aware protocol.** E2a: P-CV preprocessing with the corrected split (duplicates removed, grouped stratified 70/15/15). E2b: P-CVX preprocessing with the same split. Compare E0 → E2a (effect of the split) and E2a → E2b (effect of preprocessing). Include 5-fold grouped cross-validation on the training split and bootstrap confidence intervals on the test split.
 
-**E3 — Model comparison** (P-CVX, text only, corrected split). Multinomial NB (alpha in {0.1, 0.5, 1}); linear SVM (C in {0.1, 1, 10}, probabilities from `CalibratedClassifierCV`); Random Forest (300 trees, `class_weight='balanced_subsample'`); Logistic Regression (C in {0.1, 0.3, 1, 3, 10}); XGBoost (`tree_method='hist'`, learning rate 0.05, depth in {4, 6, 8}, `scale_pos_weight` = genuine/fake ratio in training, early stopping on validation, up to 600 trees). Tune by grouped 5-fold CV PR-AUC. Thresholds are chosen on validation: `t_f1` (best F1) and `t_r90` (lowest threshold with recall ≥ 0.90). Report test results at 0.5, `t_f1` and `t_r90`, plus McNemar's test between LR and XGBoost.
+**E3 — Model comparison** (P-CVX, text only, corrected split). Multinomial NB (alpha in {0.1, 0.5, 1}); linear SVM (C in {0.1, 1, 10}, probabilities from `CalibratedClassifierCV` with sigmoid calibration; in grouped experiments its internal folds are group-aware); Random Forest (300 trees, `class_weight='balanced_subsample'`); Logistic Regression (C in {0.1, 1, 10}; speed mode §9.1, originally {0.1, 0.3, 1, 3, 10}); XGBoost (`tree_method='hist'`, learning rate 0.05, depth in {4, 6, 8}, `scale_pos_weight` = genuine/fake ratio in training, early stopping on validation, up to 600 trees). Tune by grouped 5-fold CV PR-AUC. Thresholds are chosen on validation: `t_f1` (best F1) and `t_r90` (highest threshold whose validation recall is still ≥ 0.90). Report test results at 0.5, `t_f1` and `t_r90`, plus McNemar's test between LR and XGBoost.
 
 **E4 — Ablations.** Text-only vs text + metadata for LR and XGBoost. Class weights vs SMOTE inside training folds (imbalanced-learn Pipeline) for LR.
 
 **E5 — Explanations.** For LR, the exact SHAP value of feature i is wᵢ × (xᵢ − training mean of xᵢ), on the log-odds scale; check it against `shap.LinearExplainer` on 20 postings. For XGBoost, use `shap.TreeExplainer` and check that the base value plus the SHAP values equals the model output to within 1e-4. For LIME, use `LimeTextExplainer` with the metadata held fixed. Save global mean-absolute SHAP rankings for both models.
 
-**E6 — Faithfulness** (main contribution). Sample: up to 150 true-positive and 150 true-negative test postings, the same for every method. SHAP's word and two-word scores are converted to per-word scores (a two-word phrase is split equally between its words). Removing a word deletes every occurrence of it; metadata stays fixed.
+**E6 — Faithfulness** (main contribution). Sample: 100 test postings (up to 50 true positives and 50 true negatives; speed mode §9.1), the same for every method. SHAP's word and two-word scores are converted to per-word scores (a two-word phrase is split equally between its words). Removing a word deletes every occurrence of it; metadata stays fixed.
 
 ```latex
 \text{comp}@k = p(x) - p(x \setminus \text{top-}k) \qquad \text{(higher = more faithful)}
@@ -331,7 +331,7 @@ Nine experiments, E0–E8, each answer one research question and write their res
 \text{AOPC} = \frac{1}{|K|}\sum_{k \in K} \text{comp}@k, \quad K = \{1, 3, 5, 10, 20\}
 ```
 
-Here p(x) is the probability of the predicted label. Baseline: k random words from the same posting, averaged over 5 draws. Agreement: SHAP vs LIME top-5 and top-10 Jaccard, Spearman correlation over the union of their words, and the share of shared words with the same direction. Stability: LIME with 5 seeds, mean pairwise top-5 Jaccard (SHAP is deterministic here, so its stability is 1 by construction). Runtime: mean and 95th-percentile seconds per explanation. Tests: paired Wilcoxon signed-rank on per-posting comp@5 for SHAP vs random, LIME vs random and SHAP vs LIME, separately for LR and XGBoost. Limitation to state: deleting words creates unnatural text; the random baseline partly controls for this.
+Here p(x) is the probability of the predicted label. Baseline: k random words from the same posting, averaged over 5 draws. Agreement: SHAP vs LIME top-5 and top-10 Jaccard, Spearman correlation over the union of their words, and the share of shared words with the same direction. Stability: LIME with 3 seeds (speed mode §9.1), mean pairwise top-5 Jaccard (SHAP is deterministic here, so its stability is 1 by construction). Runtime: mean and 95th-percentile seconds per explanation. Tests: paired Wilcoxon signed-rank on per-posting comp@5 for SHAP vs random, LIME vs random and SHAP vs LIME, separately for LR and XGBoost. Limitation to state: deleting words creates unnatural text; the random baseline partly controls for this.
 
 **E7 — Shortcut audit and errors.** Review the global top-30 SHAP features for place names, company names and other accidental cues. E7a: add `location` and `industry` and retrain; if F1 jumps and these columns dominate SHAP, report a location shortcut. E7b: mask flagged tokens with `maskedtoken`, retrain, and report the change. Export 20 false negatives and 20 false positives with their top-5 SHAP features to `errors.csv`, and group them by cause by hand.
 
@@ -349,12 +349,24 @@ The plan takes 10 weeks of part-time work, with three review points with the gui
 | 4 | Ablations | E4; choose the final model and thresholds | **Review 1: baseline and corrected results** | M3 |
 | 5 | Explanation code | SHAP, LIME, reasons and faithfulness modules with tests (E5) | Explanation module; unit tests pass | M4 |
 | 6 | XAI evaluation | Run E6 in Colab; run E7 audit and error analysis | E6 and E7 results | M5 |
-| 7 | Web app core | Model-loading checks, Analyze page with its result (SHAP, rules, risk level), history | Working app | M6 |
-| 8 | Web app complete | LIME on demand, Model and About pages, E8 rule hit rates | **Review 2: demo and XAI results** | M7 |
+| 7 | Web app core | Model-loading checks, Analyze page with its result (SHAP, rules, risk level) | Working app | M6 |
+| 8 | Web app complete | LIME on demand, About page, E8 rule hit rates | **Review 2: demo and XAI results** | M7 |
 | 9 | Reporting | Auto-generated result tables and figures; write report chapters | Draft report | M8 |
 | 10 | Buffer and finish | Fix review comments; paper draft; slides | **Review 3: final report, paper draft, demo** | — |
 
 The literature review runs alongside weeks 1–3 and must be finished before Review 1. If the schedule slips, cut in this order: the external Indian test set, then the SMOTE ablation, then the LIME stability runs. E0–E3, E6 and the app core are never cut.
+
+### 9.1 Speed mode (approved by the owner on 20 Nov 2026)
+
+These decisions replace the matching parts of Sections 8, 11 and 12.
+
+- **Batches.** Milestones are built in three batches, and the agent stops after each batch for the owner's Colab run: M2+M3, then M4+M5, then M6+M7+M8.
+- **Small grids.** At most 3 values per hyperparameter. Logistic Regression uses C in {0.1, 1, 10} in every experiment (E0–E4); the other grids in E3 already have 3 values or fewer.
+- **Colab budget.** `colab_runner.ipynb` has one cell per experiment, and all experiments of a batch must run in one Colab CPU session in under 1 hour.
+- **LIME.** 100 test postings and 3 seeds (E6 sample and stability).
+- **DistilBERT.** No new DistilBERT training (stretch item S4 dropped). The DistilBERT result from the owner's earlier notebook used a different split, so it never appears in the M3 comparison tables or McNemar tests. It may only be reported as a separate side experiment, next to its own Logistic Regression baseline trained on that same split.
+- **App.** Streamlit has only the Analyze and About pages. There is no History, Model or Baseline page, no `app/db.py` and no SQLite history.
+- **Unchanged.** All tests, ruff, and the rule that no number is ever typed by hand.
 
 ## 10. New repository and software architecture
 
@@ -382,6 +394,7 @@ careerverify-xai/
 ├── requirements-lock.txt     # exact versions frozen from Colab (Section 10.5)
 ├── docs/
 │   ├── PRD.md                # this document
+│   ├── career_verify_reported.yaml  # paper's reported values, filled in by the owner
 │   └── literature/           # owner's notes and extraction table (not agent work)
 ├── configs/
 │   ├── base.yaml             # paths, seed, split ratios, TF-IDF settings
@@ -397,15 +410,18 @@ careerverify-xai/
 ├── src/cvx/
 │   ├── config.py             # load + validate YAML (dataclasses)
 │   ├── run.py                # CLI: python -m cvx.run --config ...
-│   ├── data/      load.py, profile.py, clean.py (p_cv, p_cvx), dedup.py, split.py
+│   ├── runio.py              # run folders: config.yaml, env.json, CSV/JSON, run.log, models/
+│   ├── data/      load.py, profile.py, clean.py (p_cv, p_cvx), dedup.py, split.py,
+│   │              prepare.py (split plan, model data), resample.py (E1, SMOTE)
 │   ├── features/  text.py, meta.py, build.py (ColumnTransformer)
 │   ├── models/    zoo.py (NB, SVM, RF, LR, XGB), train.py (tuning, thresholds)
-│   ├── evaluate/  metrics.py, stats.py (bootstrap, McNemar, Wilcoxon)
+│   ├── evaluate/  metrics.py, stats.py (bootstrap, McNemar, Wilcoxon), plots.py
 │   ├── explain/   shap_linear.py, shap_tree.py, lime_text.py, reasons.py, highlight.py
 │   ├── xai_eval/  faithfulness.py, agreement.py, stability.py
 │   ├── audit/     shortcuts.py, errors.py
 │   ├── rules/     safety.py (R1-R7)
 │   ├── artifacts/ save.py, load.py (hash, version, smoke checks)
+│   ├── report/    runs.py, tables.py, figures.py (used by scripts/make_*.py)
 │   ├── schema.py             # build_input(form) -> DataFrame for the app
 │   └── service.py            # analyze(), lime_compare(), health(): what the app calls
 ├── notebooks/
@@ -413,8 +429,7 @@ careerverify-xai/
 ├── scripts/   make_tables.py, make_figures.py, export_model.py
 ├── app/
 │   ├── main.py               # Streamlit entry point: Analyze page (st.form + result)
-│   ├── pages/                # 1_History.py, 2_Model.py, 3_Baseline.py, 4_About.py
-│   ├── db.py                 # SQLite history (app/data/cvx.db)
+│   ├── pages/                # 1_About.py (speed mode: no History, Model or Baseline pages)
 │   └── model_store/          # exported model files (gitignored)
 ├── runs/                     # experiment outputs (gitignored, synced from Drive)
 ├── reports/                  # generated tables and figures (committed)
@@ -439,13 +454,13 @@ stats: {bootstrap: 1000, mcnemar: [lr, xgb]}
 
 ### 10.4 What each run folder contains
 
-`config.yaml` (as run), `env.json` (Python and library versions, git commit, dataset SHA-256), `metrics.json`, `cv_results.csv`, `predictions.csv` (test-set row id, label, score), `figures/`, and `models/` when the config asks for export.
+`config.yaml` (as run), `env.json` (Python and library versions, git commit, dataset SHA-256), `metrics.json`, `cv_results.csv`, `predictions.csv` (test-set row id, label, score), `figures/`, `run.log`, and `models/` when the config asks for export. `env.json` is written at the start with `"status": "running"` and changed to `"complete"` only after every file is written, so an interrupted run is easy to spot.
 
 ### 10.5 Colab workflow
 
 1. Open `notebooks/colab_runner.ipynb` in Colab Pro. Cell 1 clones the repo, mounts Drive and prints Python and library versions.
 2. First time only: the owner runs the lock-file cell from the README in Colab. It installs `requirements.in` and writes `requirements-lock.txt` with exact versions of only the packages in `requirements.in` plus numpy, scipy, joblib and threadpoolctl (no Colab or NVIDIA packages, because Colab is Linux and the laptop is Windows). The owner commits that file. From then on, Colab and the laptop both install exactly that file, and both use Python 3.13.
-3. Cell 2 installs the lock file and the package (`pip install -e .`). Later cells each run one config, writing to `MyDrive/cvx/runs/`.
+3. Cell 2 installs the lock file and the package (`pip install -e .`). Later cells each run one config, reading the CSV from `MyDrive/FakeJobProject/data/raw/fake_job_postings.csv` and writing to `MyDrive/FakeJobProject/cvx_runs/`.
 4. The owner downloads the run folders into `runs/` locally, then runs `scripts/make_tables.py` and `scripts/make_figures.py`.
 5. A CPU runtime is enough for every experiment; a GPU is not needed.
 
@@ -473,7 +488,7 @@ The app loads its models once per process, in a function cached with `st.cache_r
 | Explainability | shap, lime |
 | Statistics and plots | scipy.stats, matplotlib |
 | Config | PyYAML with dataclasses |
-| Web | Streamlit (`st.form` for input, `st.pyplot` for matplotlib charts, `st.cache_resource` for model loading, `st.session_state` for the latest result), SQLite (Python's built-in `sqlite3`) |
+| Web | Streamlit (`st.form` for input, `st.pyplot` for matplotlib charts, `st.cache_resource` for model loading, `st.session_state` for the latest result); no database (speed mode §9.1) |
 | Testing and quality | pytest, ruff |
 | Compute | Google Colab Pro (CPU runtime), Google Drive |
 
@@ -494,10 +509,7 @@ Streamlit lists the pages in the sidebar; there are no URL routes to design. Str
 | Page | File | Shows |
 | --- | --- | --- |
 | Analyze | `app/main.py` | Input form (11.2) built with `st.form`. After submit, on the same page: score, risk level, reasons, highlighted text, top-10 SHAP chart (`st.pyplot`), safety checks, and an "Explain with LIME" button outside the form |
-| History | `app/pages/1_History.py` | Past analyses from SQLite, each with View and Delete buttons |
-| Model and evaluation | `app/pages/2_Model.py` | Model card, test metrics, global SHAP chart and faithfulness summary, read from `model_card.json` and `reports/` |
-| Compare with Career Verify | `app/pages/3_Baseline.py` | The E0 reproduction and E2 corrected results side by side, read from `reports/` |
-| About | `app/pages/4_About.py` | What the tool can and cannot do, dataset age, the "not proof" warning |
+| About | `app/pages/1_About.py` | What the tool can and cannot do, dataset age, the "not proof" warning |
 
 Every page's sidebar has a "System check" box showing the result of `service.health()`: loaded models, library versions and the smoke-check result.
 
@@ -505,7 +517,7 @@ Every page's sidebar has a "System check" box showing the result of `service.hea
 
 1. **Full posting:** title\*, company name, company description, description\*, requirements, benefits, salary range; dropdowns for employment type, experience, education and function (each with Unknown); yes/no for logo, screening questions and remote. Uses the text + metadata model.
 2. **Text only:** one large box for a message from WhatsApp, email and so on. Uses the text-only model.
-3. Both modes have optional recruiter email and company website fields (rules only), a model choice (Auto, LR, XGBoost) and a "Don't save" checkbox. Maximum 20,000 characters. Fields marked \* are required; they are checked after submit and a missing one is shown with `st.error`.
+3. Both modes have optional recruiter email and company website fields (rules only), and a model choice (Auto, LR, XGBoost). Maximum 20,000 characters. Fields marked \* are required; they are checked after submit and a missing one is shown with `st.error`.
 
 The mode is chosen with a radio button above the form. Widgets inside an `st.form` do not update the page until the form is submitted, so a mode switch inside the form would not change which fields are shown.
 
@@ -538,10 +550,10 @@ Example display: "Model: Medium · Safety rules: High (asks for a registration f
 
 - **Highlighting:** red for words pushing towards fake, green towards genuine, strength by absolute SHAP value. Each highlight also has a +/− sign and a tooltip, so colour is never the only signal. The highlighted HTML is built by `cvx.explain.highlight` from text escaped with `html.escape`, then shown with `st.markdown(..., unsafe_allow_html=True)`.
 - **Reasons:** templates filled from the top-5 SHAP features, for example "The phrase ‘registration fee’ appears much more often in fake postings in the training data" or "The posting has no company logo".
-- **LIME:** runs only when the button is clicked (`num_samples=1000`), inside `st.spinner`, and shows its top-10 words next to SHAP's, with their top-5 Jaccard overlap. It uses the input kept in `st.session_state`, so it also works when "Don't save" is ticked.
+- **LIME:** runs only when the button is clicked (`num_samples=1000`), inside `st.spinner`, and shows its top-10 words next to SHAP's, with their top-5 Jaccard overlap. It uses the input kept in `st.session_state`.
 - **Fixed caution:** "These reasons show what the model learned from older public job postings. They are not proof. Verify the company yourself."
 
-### 11.6 App functions and storage
+### 11.6 App functions (no storage)
 
 There is no HTTP API. The pages call three plain Python functions in `src/cvx/service.py`. They do not import Streamlit, so they can be tested directly with pytest.
 
@@ -553,7 +565,7 @@ There is no HTTP API. The pages call three plain Python functions in `src/cvx/se
 
 `models` is the object returned by the cached loading function (Section 10.6).
 
-SQLite file `app/data/cvx.db`, table `analyses` (id, created\_at, mode, model\_id, input\_json, score, label, risk\_level, explanation\_json). An analysis is saved only when "Don't save" is not ticked. Data never leaves the laptop.
+No storage (speed mode §9.1): there is no database and no history. The latest input and result live only in `st.session_state` for the current browser session and are never written to disk. Data never leaves the laptop.
 
 ### 11.7 Non-functional requirements
 
@@ -581,6 +593,8 @@ The agent builds eight milestones in order and stops after each for the owner to
 | M6 | Model export, safe loading, Streamlit core, safety rules | App on laptop | 7 |
 | M7 | LIME in app, Model, Baseline and About pages, E8 | App; E8 in Colab | 8 |
 | M8 | Reports, README, reproducibility check | Fresh-clone test | 9 |
+
+Speed mode (§9.1): built in three batches, M2+M3, M4+M5 and M6+M7+M8, with a stop for the owner's Colab run after each batch. Every acceptance box below still applies.
 
 ### M1 — Foundation
 
@@ -615,7 +629,7 @@ The agent builds eight milestones in order and stops after each for the owner to
 
 - [ ] comp@k, suff@k and AOPC tested on a toy model where the right answer is known
 - [ ] E6 writes per-posting results, a summary with Wilcoxon tests, and comprehensiveness-vs-k curves for SHAP, LIME and random
-- [ ] E6 runs in Colab in under 90 minutes; if slower, LIME `num_samples` is reduced and the setting recorded
+- [ ] The M4+M5 batch runs in one Colab CPU session in under 1 hour; if slower, LIME `num_samples` is reduced and the setting recorded
 - [ ] E7 writes the audit, E7a and E7b results, and `errors.csv`
 
 ### M6 — App core
@@ -629,8 +643,8 @@ The agent builds eight milestones in order and stops after each for the owner to
 
 ### M7 — App complete
 
-- [ ] LIME button works under 15 seconds with `st.spinner` and the SHAP comparison, including when "Don't save" is ticked
-- [ ] History, Model, Baseline and About pages exist in `app/pages/`; Model and Baseline pages read numbers only from `model_card.json` and `reports/`
+- [ ] LIME button works under 15 seconds with `st.spinner` and the SHAP comparison
+- [ ] The About page exists in `app/pages/` (speed mode: no History, Model or Baseline pages, no SQLite)
 - [ ] Works offline; keyboard and screen-reader basics checked; every chart has a matching table
 - [ ] E8 rule hit rates written to `reports/`
 
@@ -642,7 +656,7 @@ The agent builds eight milestones in order and stops after each for the owner to
 
 ### Stretch items (only after M8)
 
-S1 external Indian test set (E8 optional part); S2 screenshot input with OCR; S3 batch CSV upload; S4 DistilBERT model with SHAP, only if a GPU and time are available.
+S1 external Indian test set (E8 optional part); S2 screenshot input with OCR; S3 batch CSV upload; S4 DistilBERT model with SHAP: dropped in speed mode (§9.1); no new DistilBERT training.
 
 ## 13. Risks, limitations and ethics
 
@@ -672,7 +686,7 @@ The biggest risks are an agent inventing numbers, version mismatch between Colab
 
 - The tool is a research prototype. It warns users that results are not proof and must not be used to accuse a real employer.
 - The optional Indian test set must have names, phone numbers, emails and links removed before storage, and it is never published.
-- The app stores data only on the local machine and offers "Don't save".
+- The app stores no analyses: inputs and results live only in the current browser session.
 - Credit Career Verify fairly: report its results as stated, and describe the inconsistencies as observations from its own numbers, not as accusations.
 
 ## 14. Glossary
@@ -706,7 +720,7 @@ The biggest risks are an agent inventing numbers, version mismatch between Colab
 | SMOTE | Creates synthetic rare-class examples by blending real ones |
 | Sufficiency | Drop in confidence when only the top words are kept; lower = more faithful |
 | TF-IDF | Word score: frequent in this posting, rare across all postings |
-| Threshold (`t_f1`, `t_r90`) | Score cut-off for "fake": best-F1 cut-off, and the cut-off giving at least 90% recall |
+| Threshold (`t_f1`, `t_r90`) | Score cut-off for "fake": best-F1 cut-off, and the highest cut-off that still gives at least 90% recall on validation |
 | Wilcoxon test | Compares paired values (two methods on the same postings) without assuming a normal distribution |
 | XGBoost | Many small decision trees, each correcting the previous ones |
 

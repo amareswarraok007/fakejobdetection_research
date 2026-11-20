@@ -1,0 +1,23 @@
+# E1 — Reported vs realistic performance (PRD Section 8.2).
+# E1a/E1b balance the WHOLE dataset before splitting (likely Career Verify setup).
+# E1c is the correct control: E0's split of the original data, oversampling inside training only.
+experiment_id: e1_leakage
+extends: e0_reproduce.yaml
+
+variants:
+  - name: e1a_oversample_before_split
+    overrides: {resample: {method: random_oversample, when: before_split}}
+  - name: e1b_smote_before_split
+    overrides: {resample: {method: smote, when: before_split}}
+  - name: e1c_oversample_train_only
+    overrides: {resample: {method: random_oversample, when: train_only}}
+compare_to: e1c_oversample_train_only   # metrics.json: "reported_vs_realistic"
+
+assumptions:
+  - "All E0 settings and assumptions apply (this file extends e0_reproduce.yaml)."
+  - "Balancing target is 1:1 fake:genuine (imbalanced-learn sampling_strategy='auto'), seed 42."
+  - "E1a/E1b: balance all rows, then a stratified random 80/10/10 split; the test set is therefore about half fake and can contain copies (E1a) or SMOTE blends (E1b) of training postings."
+  - "E1b: TF-IDF (E0 settings) is fitted on all postings before SMOTE, because SMOTE needs numbers; SMOTE k_neighbors=5; SMOTE-made rows have ids smote_<n>."
+  - "E1c: E0's split of the original data; random oversampling inside the training split only (imbalanced-learn Pipeline); validation and test keep the natural prevalence."
+  - "class_weight='balanced' is kept as in E0; on balanced training data the weights are about 1, so it has almost no effect."
+  - "E1a/E1b vs E1c is labelled 'reported vs realistic performance', not pure leakage, because the test prevalence differs; PR-AUC, ROC-AUC and fake-class recall are compared."

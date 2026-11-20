@@ -99,7 +99,7 @@ Put the Kaggle file `fake_job_postings.csv` in `data/`.
 
 ```bash
 pytest -q
-ruff check src tests
+ruff check src tests scripts
 ```
 
 ## 4. Data profile
@@ -109,3 +109,28 @@ python -m cvx.data.profile --config configs/base.yaml
 ```
 
 Writes `reports/data_profile.json` (every statistic in PRD Section 6.3), computed from the CSV.
+
+## 5. Experiments (Colab) and reports (laptop)
+
+Experiments E0–E4 run in Colab with `notebooks/colab_runner.ipynb` (one cell per experiment).
+Each cell runs, for example:
+
+```bash
+python -m cvx.run --config configs/e0_reproduce.yaml \
+    --data /content/drive/MyDrive/FakeJobProject/data/raw/fake_job_postings.csv \
+    --runs-dir /content/drive/MyDrive/FakeJobProject/cvx_runs
+```
+
+Each run writes `<runs-dir>/<experiment_id>/<UTC timestamp>/` with `config.yaml`, `env.json`,
+`metrics.json`, `cv_results.csv`, `predictions.csv`, `figures/`, `run.log` (and `models/` for E4).
+A run is finished only when `env.json` says `"status": "complete"`.
+
+Copy the complete run folders to `runs/` on the laptop, fill in `docs/career_verify_reported.yaml`
+from the paper, then:
+
+```bash
+python scripts/make_tables.py --runs runs --out reports/tables
+python scripts/make_figures.py --runs runs --out reports/figures
+```
+
+Both scripts use the newest complete run of each experiment.

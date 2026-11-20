@@ -1,8 +1,10 @@
 # Raw data, experiment outputs and exported models are never committed.
-data/
-runs/
-app/model_store/
-app/data/
+# The leading "/" anchors each pattern to the repository root. Without it, "data/"
+# would also hide the code folders src/cvx/data/ and tests/data/.
+/data/
+/runs/
+/app/model_store/
+/app/data/
 # Streamlit secrets file, in case one is ever created (CLAUDE.md rule 12).
 .streamlit/secrets.toml
 

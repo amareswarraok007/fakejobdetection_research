@@ -5,11 +5,15 @@ child's values are merged on top (nested dictionaries merge key by key; lists an
 plain values are replaced). The merged result is turned into frozen dataclasses.
 
 Any key that is not defined below is rejected with a clear error. This catches
-typos such as ``thresold`` that would otherwise be silently ignored. Later
-milestones add new keys here when their experiments need them.
+typos such as ``thresold`` that would otherwise be silently ignored.
+
+An experiment can have *variants* (for example E1a/E1b/E1c). Each variant is the
+experiment config with a few keys overridden; ``expand_variants`` builds one full,
+validated ``Config`` per variant.
 """
 
 import dataclasses
+import re
 import types
 import typing
 from dataclasses import dataclass, field
@@ -22,6 +26,15 @@ PREPROCESSING_METHODS = ("p_cv", "p_cvx")
 SPLIT_METHODS = ("random_stratified", "grouped_stratified")
 MODEL_IDS = ("nb", "linear_svm", "rf", "lr", "xgb")
 NAMED_THRESHOLDS = ("t_f1", "t_r90")
+TUNING_METHODS = ("validation", "grouped_cv")
+SCORING_METRICS = ("average_precision", "roc_auc")
+RESAMPLE_METHODS = ("random_oversample", "smote")
+RESAMPLE_WHEN = ("before_split", "train_only")
+# Speed mode (PRD §9.1): at most this many values per hyperparameter.
+MAX_GRID_VALUES = 3
+DEFAULT_VARIANT = "main"
+_VARIANT_NAME = re.compile(r"^[a-z0-9_]+$")
+_NOT_OVERRIDABLE = ("experiment_id", "variants", "compare_to")
 
 
 class ConfigError(ValueError):
@@ -68,18 +81,39 @@ class FeaturesConfig:
 
 @dataclass(frozen=True)
 class TuningConfig:
-    """Hyper-parameter tuning by grouped cross-validation."""
+    """How hyperparameters are chosen: on the validation split or by grouped CV."""
 
-    cv_folds: int
+    method: str
     scoring: str
+    cv_folds: int | None = None
+
+
+@dataclass(frozen=True)
+class ResampleConfig:
+    """Balancing the classes: which method, and before the split or inside training only."""
+
+    method: str
+    when: str
 
 
 @dataclass(frozen=True)
 class StatsConfig:
-    """Statistical tests run on the test split."""
+    """Statistical tests on the test split.
+
+    ``mcnemar`` is a list of pairs; each item is ``"variant/model"`` or just ``"model"``
+    when the experiment has one variant.
+    """
 
     bootstrap: int | None = None
-    mcnemar: list[str] = field(default_factory=list)
+    mcnemar: list[list[str]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class VariantConfig:
+    """One named variant: the experiment config with ``overrides`` merged on top."""
+
+    name: str
+    overrides: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -94,9 +128,15 @@ class Config:
     tfidf: TfidfConfig
     features: FeaturesConfig = field(default_factory=FeaturesConfig)
     models: list[str] = field(default_factory=list)
+    grids: dict[str, dict[str, list[Any]]] = field(default_factory=dict)
     tuning: TuningConfig | None = None
     thresholds: list[float | str] = field(default_factory=list)
+    resample: ResampleConfig | None = None
     stats: StatsConfig | None = None
+    variants: list[VariantConfig] = field(default_factory=list)
+    compare_to: str | None = None
+    export_models: bool = False
+    assumptions: list[str] = field(default_factory=list)
 
 
 def load_config(path: str | Path) -> Config:
@@ -108,12 +148,32 @@ def load_config(path: str | Path) -> Config:
     merged = _load_merged(Path(path), seen=())
     config = _build(Config, merged, where="config")
     _validate(config)
+    for _, variant_config in expand_variants(config):
+        _validate(variant_config)
     return config
 
 
 def config_to_dict(config: Config) -> dict[str, Any]:
     """Convert a ``Config`` back to plain dictionaries (for saving with a run)."""
     return dataclasses.asdict(config)
+
+
+def expand_variants(config: Config) -> list[tuple[str, Config]]:
+    """Return ``(variant_name, config)`` pairs; one ``("main", config)`` if there are none.
+
+    Each variant config is the experiment config with the variant's ``overrides``
+    deep-merged on top, and with ``variants``/``compare_to`` removed.
+    """
+    base = config_to_dict(config)
+    base.update(variants=[], compare_to=None)
+    if not config.variants:
+        return [(DEFAULT_VARIANT, _build(Config, base, where="config"))]
+    expanded = []
+    for variant in config.variants:
+        where = f"config.variants.{variant.name}"
+        merged = _deep_merge(base, variant.overrides)
+        expanded.append((variant.name, _build(Config, merged, where=where)))
+    return expanded
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -153,8 +213,8 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return result
 
 
-def _nested_dataclass(annotation: Any) -> type | None:
-    """If a field's type is a dataclass (or ``Dataclass | None``), return that dataclass."""
+def _dataclass_in(annotation: Any) -> type | None:
+    """If a type is a dataclass (or ``Dataclass | None``), return that dataclass."""
     if dataclasses.is_dataclass(annotation):
         return annotation
     if typing.get_origin(annotation) in (Union, types.UnionType):
@@ -162,6 +222,23 @@ def _nested_dataclass(annotation: Any) -> type | None:
             if dataclasses.is_dataclass(arg):
                 return arg
     return None
+
+
+def _convert(annotation: Any, value: Any, where: str) -> Any:
+    """Build nested dataclasses (single or in a list) from plain YAML values."""
+    if value is None:
+        return None
+    sub = _dataclass_in(annotation)
+    if sub is not None:
+        return _build(sub, value, where)
+    if typing.get_origin(annotation) is list:
+        (item_type,) = typing.get_args(annotation) or (Any,)
+        item_class = _dataclass_in(item_type)
+        if item_class is not None:
+            if not isinstance(value, list):
+                raise ConfigError(f"'{where}' must be a list.")
+            return [_build(item_class, v, f"{where}[{i}]") for i, v in enumerate(value)]
+    return value
 
 
 def _build(cls: type, data: Any, where: str) -> Any:
@@ -183,34 +260,43 @@ def _build(cls: type, data: Any, where: str) -> Any:
             if no_default and f.default_factory is dataclasses.MISSING:
                 raise ConfigError(f"Missing required key '{where}.{f.name}'.")
             continue
-        value = data[f.name]
-        sub = _nested_dataclass(hints[f.name])
-        if sub is not None and value is not None:
-            value = _build(sub, value, where=f"{where}.{f.name}")
-        kwargs[f.name] = value
+        kwargs[f.name] = _convert(hints[f.name], data[f.name], f"{where}.{f.name}")
     return cls(**kwargs)
 
 
+# --- validation ------------------------------------------------------------------
 def _validate(config: Config) -> None:
     """Check values that the type system cannot (allowed names, ratios, ranges)."""
     if not isinstance(config.seed, int):
         raise ConfigError(f"'seed' must be an integer, got {config.seed!r}.")
-    if config.preprocessing not in PREPROCESSING_METHODS:
-        raise ConfigError(
-            f"'preprocessing' must be one of {PREPROCESSING_METHODS}, got {config.preprocessing!r}."
-        )
+    _check_choice("preprocessing", config.preprocessing, PREPROCESSING_METHODS)
     _validate_split(config.split)
     unknown_models = [m for m in config.models if m not in MODEL_IDS]
     if unknown_models:
         raise ConfigError(f"Unknown model id(s) {unknown_models}. Allowed: {list(MODEL_IDS)}")
     for threshold in config.thresholds:
         _validate_threshold(threshold)
+    _validate_grids(config.grids)
+    if config.tuning is not None:
+        _validate_tuning(config.tuning, config.split)
+    if config.models and config.tuning is None:
+        raise ConfigError("'tuning' is required when 'models' is set.")
+    if config.resample is not None:
+        _validate_resample(config)
+    if config.stats is not None:
+        _validate_stats(config.stats)
+    _validate_variants(config)
+
+
+def _check_choice(name: str, value: Any, allowed: tuple[str, ...]) -> None:
+    """Raise if ``value`` is not one of ``allowed``."""
+    if value not in allowed:
+        raise ConfigError(f"'{name}' must be one of {allowed}, got {value!r}.")
 
 
 def _validate_split(split: SplitConfig) -> None:
     """Check the split method, the three ratios and grouped-split settings."""
-    if split.method not in SPLIT_METHODS:
-        raise ConfigError(f"'split.method' must be one of {SPLIT_METHODS}, got {split.method!r}.")
+    _check_choice("split.method", split.method, SPLIT_METHODS)
     if len(split.ratios) != 3 or any(r <= 0 for r in split.ratios):
         raise ConfigError("'split.ratios' must be three positive numbers (train, val, test).")
     if abs(sum(split.ratios) - 1.0) > 1e-9:
@@ -232,3 +318,76 @@ def _validate_threshold(threshold: float | str) -> None:
             )
     elif isinstance(threshold, bool) or not 0 <= float(threshold) <= 1:
         raise ConfigError(f"Threshold {threshold!r} must be between 0 and 1.")
+
+
+def _validate_grids(grids: dict[str, dict[str, list[Any]]]) -> None:
+    """Grid model ids must be known; each hyperparameter has 1 to 3 values (speed mode)."""
+    for model_id, grid in grids.items():
+        _check_choice("grids key", model_id, MODEL_IDS)
+        if not isinstance(grid, dict):
+            raise ConfigError(f"'grids.{model_id}' must map parameter names to lists.")
+        for name, values in grid.items():
+            if not isinstance(values, list) or not 1 <= len(values) <= MAX_GRID_VALUES:
+                raise ConfigError(
+                    f"'grids.{model_id}.{name}' must be a list of 1 to {MAX_GRID_VALUES} values "
+                    "(speed mode, PRD §9.1)."
+                )
+
+
+def _validate_tuning(tuning: TuningConfig, split: SplitConfig) -> None:
+    """Grouped CV needs a fold count and a grouped split (groups come from the split)."""
+    _check_choice("tuning.method", tuning.method, TUNING_METHODS)
+    _check_choice("tuning.scoring", tuning.scoring, SCORING_METRICS)
+    if tuning.method == "grouped_cv":
+        if tuning.cv_folds is None or tuning.cv_folds < 2:
+            raise ConfigError("'tuning.cv_folds' must be an integer >= 2 for grouped_cv.")
+        if split.method != "grouped_stratified":
+            raise ConfigError(
+                "'tuning.method: grouped_cv' needs 'split.method: grouped_stratified'."
+            )
+
+
+def _validate_resample(config: Config) -> None:
+    """Allowed combinations of resampling method, timing, split and models."""
+    resample = config.resample
+    assert resample is not None
+    _check_choice("resample.method", resample.method, RESAMPLE_METHODS)
+    _check_choice("resample.when", resample.when, RESAMPLE_WHEN)
+    if resample.when == "before_split":
+        if config.split.method != "random_stratified":
+            raise ConfigError(
+                "Resampling before the split is only defined for a random split (E1)."
+            )
+        if resample.method == "smote" and config.features.metadata:
+            raise ConfigError("SMOTE before the split works on TF-IDF text features only.")
+    unsupported = [m for m in config.models if m in ("xgb", "linear_svm")]
+    if resample.when == "train_only" and unsupported:
+        # xgb needs its own fit path (early stopping) and linear_svm's grouped calibration
+        # folds would point at the wrong rows once the sampler adds rows.
+        raise ConfigError(f"Resampling inside training is not supported for {unsupported}.")
+
+
+def _validate_stats(stats: StatsConfig) -> None:
+    """Bootstrap count is positive; every McNemar entry is a pair."""
+    if stats.bootstrap is not None and (
+        not isinstance(stats.bootstrap, int) or stats.bootstrap < 1
+    ):
+        raise ConfigError("'stats.bootstrap' must be a positive integer.")
+    for pair in stats.mcnemar:
+        if not isinstance(pair, list) or len(pair) != 2:
+            raise ConfigError(f"Each 'stats.mcnemar' entry must be a pair, got {pair!r}.")
+
+
+def _validate_variants(config: Config) -> None:
+    """Variant names are unique and simple; overrides may not change the experiment itself."""
+    names = [v.name for v in config.variants]
+    if len(set(names)) != len(names):
+        raise ConfigError(f"Variant names must be unique, got {names}.")
+    for variant in config.variants:
+        if not _VARIANT_NAME.match(variant.name):
+            raise ConfigError(f"Variant name {variant.name!r} may use only a-z, 0-9 and '_'.")
+        blocked = [k for k in variant.overrides if k in _NOT_OVERRIDABLE]
+        if blocked:
+            raise ConfigError(f"Variant {variant.name!r} may not override {blocked}.")
+    if config.compare_to is not None and config.compare_to not in names:
+        raise ConfigError(f"'compare_to' must name a variant, got {config.compare_to!r}.")

@@ -1,0 +1,22 @@
+# E3 — Model comparison (PRD Section 8.2): P-CVX, text only, corrected split.
+experiment_id: e3_models
+extends: base.yaml
+
+preprocessing: p_cvx
+features: {text: true, metadata: false}
+models: [nb, linear_svm, rf, lr, xgb]
+grids:
+  lr: {C: [0.1, 1.0, 10.0]}   # speed mode; other grids are the zoo defaults (<= 3 values)
+tuning: {method: grouped_cv, cv_folds: 5, scoring: average_precision}
+thresholds: [0.5, t_f1, t_r90]
+stats: {bootstrap: 1000, mcnemar: [[lr, xgb]]}
+
+assumptions:
+  - "Corrected split as in E2 (grouped stratified 70/15/15, seed 42)."
+  - "Tuning by grouped 5-fold CV PR-AUC inside the training split; models with one setting (rf) are not tuned."
+  - "NB: MultinomialNB, alpha in {0.1, 0.5, 1}, no class weighting (NB has none)."
+  - "Linear SVM: LinearSVC, class_weight='balanced', max_iter 5000, C in {0.1, 1, 10}; probabilities from CalibratedClassifierCV(method='sigmoid') with 5 internal folds that are GROUPED (StratifiedGroupKFold on the training groups)."
+  - "Random Forest: 300 trees, class_weight='balanced_subsample', no grid."
+  - "Logistic Regression: L2, class_weight='balanced', lbfgs, max_iter 2000, C in {0.1, 1, 10} (speed mode)."
+  - "XGBoost: tree_method='hist', learning_rate 0.05, max_depth in {4, 6, 8}, scale_pos_weight = genuine/fake in the rows being fitted, up to 600 trees, early stopping after 50 rounds without PR-AUC (aucpr) gain; during CV it stops on each fold's held-out part, in the final fit on the validation split."
+  - "McNemar: exact binomial version, LR vs XGBoost, at each threshold (each model uses its own validation thresholds)."

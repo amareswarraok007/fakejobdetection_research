@@ -23,7 +23,7 @@ The full specification is in `docs/PRD.md`. If this file and the PRD disagree, s
 
 ## 3. Rules you must always follow
 
-1. **One milestone at a time.** Build only the milestone the owner names (PRD §12). When it is done, stop and report using the template in §8 below. Do not start the next milestone until the owner says so.
+1. **One milestone (or approved batch) at a time.** Build only the milestone or batch the owner names (PRD §12; speed-mode batches in PRD §9.1). When it is done, stop and report using the template in §8 below. Do not start the next milestone until the owner says so.
 2. **Never invent numbers.** No metric, count, score or result may be typed by hand anywhere (code, README, docs, templates, comments). Results come only from run folders produced by `python -m cvx.run`, and tables only from `scripts/make_tables.py`. Where a number is not known yet, write `<<from runs/...>>`.
 3. **Never invent data.** Do not create synthetic job postings to "make code run" on real experiments. Tiny hand-written fixtures are allowed only inside `tests/`.
 4. **Never invent references.** Do not add citations or paper titles. Literature is the owner's work.
@@ -69,7 +69,7 @@ src/cvx/        the package: config, run, data/, features/, models/, evaluate/,
                 service.py (the only functions the app calls; PRD §11.6)
 notebooks/      colab_runner.ipynb only (thin: clone, install, mount Drive, run configs)
 scripts/        make_tables.py, make_figures.py, export_model.py
-app/            Streamlit app (main.py, pages/, db.py, model_store/); no ML logic
+app/            Streamlit app (main.py, pages/1_About.py, model_store/); no ML logic, no database
 .streamlit/     config.toml (localhost only, usage stats off, error details hidden)
 runs/           experiment outputs (gitignored)
 reports/        generated tables and figures (committed)
@@ -85,7 +85,7 @@ docs/PRD.md     full specification
 - **P-CVX:** our preprocessing (strip HTML, mask URL, email and phone placeholders as `urltoken`, `emailtoken`, `phonetoken`, lowercase, keep "no" and "not", no lemmatisation, join the same five fields with labels).
 - **Corrected split:** remove exact duplicates, group near-duplicates (TF-IDF cosine ≥ 0.95), then grouped stratified 70/15/15. No group may appear in two splits.
 - **Primary metrics:** fake-class F1 and PR-AUC. Accuracy is reported but never used to choose a model.
-- **Thresholds:** `t_f1` = best F1 on validation; `t_r90` = lowest threshold with recall ≥ 0.90 on validation.
+- **Thresholds:** `t_f1` = best F1 on validation; `t_r90` = highest threshold whose recall on validation is still ≥ 0.90.
 - **Linear SHAP (LR):** φᵢ = wᵢ × (xᵢ − mean of xᵢ in training), log-odds scale. Must match `shap.LinearExplainer` within 1e-6.
 - **Tree SHAP (XGBoost):** `shap.TreeExplainer`; base value + Σφ must equal the model margin within 1e-4.
 - **Faithfulness:** comp@k = p(x) − p(x without top-k words); suff@k = p(x) − p(only top-k words); AOPC = mean comp@k over k ∈ {1, 3, 5, 10, 20}; p = probability of the predicted label; removing a word deletes every occurrence; metadata stays fixed; baseline = k random words, 5 draws.

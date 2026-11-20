@@ -1,0 +1,27 @@
+# E2 — Leakage-aware protocol (PRD Section 8.2).
+# E2a: P-CV preprocessing with the corrected split. E2b: P-CVX with the same split.
+experiment_id: e2_protocol
+extends: base.yaml            # grouped stratified 70/15/15, near-duplicates at 0.95
+
+models: [lr]
+grids:
+  lr: {C: [0.1, 1.0, 10.0]}
+tuning: {method: grouped_cv, cv_folds: 5, scoring: average_precision}
+thresholds: [0.5, t_f1, t_r90]
+stats: {bootstrap: 1000}
+
+variants:
+  - name: e2a_p_cv
+    overrides:
+      preprocessing: p_cv
+      tfidf: {ngram_range: [1, 1], min_df: 1, max_df: 1.0, max_features: null, sublinear_tf: false}
+  - name: e2b_p_cvx
+    overrides: {preprocessing: p_cvx}   # base.yaml P-CVX TF-IDF settings
+
+assumptions:
+  - "Corrected split: exact duplicates removed (all columns except job_id), near-duplicates grouped at TF-IDF cosine >= 0.95 on P-CVX text without labels, StratifiedGroupKFold with 20 folds -> 14 train / 3 val / 3 test, seed 42."
+  - "E2a keeps E0's cleaning and TF-IDF defaults, so E0 -> E2a shows the effect of the split."
+  - "E2b uses P-CVX cleaning AND the P-CVX TF-IDF settings (1-2 grams, min_df 3, max_df 0.9, 20,000 features, sublinear tf), so E2a -> E2b shows the effect of the whole P-CVX preprocessing."
+  - "C chosen by grouped 5-fold CV PR-AUC inside the training split (the 5-fold grouped CV asked for in E2); grid {0.1, 1, 10} (speed mode)."
+  - "Logistic Regression as in E0: L2, class_weight='balanced', lbfgs, max_iter 2000."
+  - "Bootstrap: 1,000 resamples of the test split, percentile 95% CI, thresholds fixed from validation."

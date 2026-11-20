@@ -109,3 +109,118 @@ def tiny_postings() -> pd.DataFrame:
     )
     df["job_id"] = [1, 2, 3, 4, 5, 6]
     return df
+
+
+# --- a small corpus for training/run tests --------------------------------------
+# Built from a few HAND-WRITTEN phrases. It exists only so the pipeline code can be
+# exercised end to end in tests; it is never used for real experiments (CLAUDE.md rule 3).
+_FAKE_PHRASES = (
+    "earn money from home",
+    "registration fee required",
+    "weekly pay guaranteed",
+    "no experience needed",
+    "send your bank details",
+    "data entry work",
+)
+_GENUINE_PHRASES = (
+    "software engineer python",
+    "join our product team",
+    "health insurance and pension",
+    "degree in computer science",
+    "agile development team",
+    "customer success manager",
+)
+_FILLER = (
+    "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike "
+    "november oscar papa quebec romeo sierra tango uniform victor whiskey xray yankee zulu"
+).split()
+_FUNCTIONS = ("Sales", "Engineering", "Marketing", "Administrative", "Customer Service")
+
+
+def build_corpus(n_fake: int = 30, n_genuine: int = 60) -> pd.DataFrame:
+    """Postings whose wording depends on the label, with a unique ``ref`` word per row."""
+    rows = []
+    for i in range(n_fake + n_genuine):
+        fake = i < n_fake
+        phrases = _FAKE_PHRASES if fake else _GENUINE_PHRASES
+        filler = " ".join(_FILLER[(i * 7 + k) % len(_FILLER)] for k in range(4))
+        rows.append(
+            {
+                "title": f"{phrases[i % 6].title()} ref{i:03d}",
+                "description": f"{phrases[(i + 1) % 6]}. {phrases[(i + 2) % 6]}! {filler}",
+                "company_profile": NAN if fake else f"Company {_FILLER[i % 26]} Limited",
+                "salary_range": "100-200" if i % 4 == 0 else NAN,
+                "employment_type": ("Full-time", "Part-time", "Contract")[i % 3],
+                "function": _FUNCTIONS[i % len(_FUNCTIONS)],
+                "has_company_logo": 0 if fake else 1,
+                "has_questions": i % 2,
+                "telecommuting": 1 if fake else 0,
+                "fraudulent": int(fake),
+            }
+        )
+    return build_postings(rows)
+
+
+@pytest.fixture
+def corpus() -> pd.DataFrame:
+    """90 postings (30 fake, 60 genuine) for pipeline tests."""
+    return build_corpus()
+
+
+_BASE_YAML = """
+seed: 42
+paths: {data_csv: DATA, runs_dir: RUNS, reports_dir: reports}
+tfidf: {ngram_range: [1, 2], min_df: 1, max_df: 1.0, max_features: 500, sublinear_tf: true}
+thresholds: [0.5, t_f1, t_r90]
+"""
+_TINY_CONFIGS = {
+    "e0_reproduce": """
+experiment_id: e0_reproduce
+preprocessing: p_cv
+split: {method: random_stratified, ratios: [0.8, 0.1, 0.1]}
+models: [lr]
+grids: {lr: {C: [0.1, 1.0, 10.0]}}
+tuning: {method: validation, scoring: average_precision}
+stats: {bootstrap: 20}
+""",
+    "e1_leakage": """
+experiment_id: e1_leakage
+preprocessing: p_cv
+split: {method: random_stratified, ratios: [0.8, 0.1, 0.1]}
+models: [lr]
+tuning: {method: validation, scoring: average_precision}
+variants:
+  - {name: e1a, overrides: {resample: {method: random_oversample, when: before_split}}}
+  - {name: e1b, overrides: {resample: {method: smote, when: before_split}}}
+  - {name: e1c, overrides: {resample: {method: random_oversample, when: train_only}}}
+compare_to: e1c
+""",
+    "e3_models": """
+experiment_id: e3_models
+preprocessing: p_cvx
+split: {method: grouped_stratified, ratios: [0.6, 0.2, 0.2], near_dup_threshold: 0.95, n_folds: 5}
+models: [nb, linear_svm, rf, lr, xgb]
+grids: {xgb: {max_depth: [2, 3]}}
+tuning: {method: grouped_cv, cv_folds: 3, scoring: average_precision}
+stats: {bootstrap: 20, mcnemar: [[lr, xgb]]}
+export_models: true
+""",
+}
+
+
+@pytest.fixture(scope="session")
+def tiny_runs(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    """Run three tiny experiments once per test session; tests read their run folders."""
+    from cvx.run import run_experiment
+
+    root = tmp_path_factory.mktemp("tiny_runs")
+    data = root / "postings.csv"
+    build_corpus().to_csv(data, index=False)
+    runs = root / "runs"
+    paths = {}
+    for name, body in _TINY_CONFIGS.items():
+        config = root / f"{name}.yaml"
+        text = _BASE_YAML.replace("DATA", data.as_posix()).replace("RUNS", runs.as_posix()) + body
+        config.write_text(text, encoding="utf-8")
+        paths[name] = run_experiment(config)
+    return {"root": runs, "runs": paths, "data": data}

@@ -1,0 +1,33 @@
+# E0 — Reproduce Career Verify as described (PRD Section 8.2).
+experiment_id: e0_reproduce
+extends: base.yaml
+
+preprocessing: p_cv
+split:
+  method: random_stratified
+  ratios: [0.80, 0.10, 0.10]
+
+tfidf:                       # scikit-learn TfidfVectorizer defaults (the paper gives no settings)
+  ngram_range: [1, 1]
+  min_df: 1
+  max_df: 1.0
+  max_features: null
+  sublinear_tf: false
+
+features: {text: true, metadata: false}
+models: [lr]
+grids:
+  lr: {C: [0.1, 1.0, 10.0]}  # speed mode (PRD §9.1); originally {0.01, 0.1, 1, 10}
+tuning: {method: validation, scoring: average_precision}
+thresholds: [0.5, t_f1, t_r90]
+stats: {bootstrap: 1000}
+
+assumptions:
+  - "Split: stratified random 80/10/10, seed 42, on all rows; duplicates are not handled (as in the paper)."
+  - "TF-IDF: scikit-learn defaults (unigrams, min_df=1, max_df=1.0, no feature limit, no sublinear tf); the paper reports no settings."
+  - "Cleaning P-CV: lowercase, keep letters a-z only, NLTK English stop words removed, WordNet lemmatiser with its default noun part of speech; words split with a simple pattern, not an NLTK tokenizer."
+  - "Missing text fields become empty strings; no rows are dropped."
+  - "Logistic Regression: L2 penalty, class_weight='balanced', solver lbfgs, max_iter fixed at 2000 (the paper tuned it but reports no value)."
+  - "C chosen on the validation split by PR-AUC (average precision); the paper names no tuning metric. Grid {0.1, 1, 10} (speed mode)."
+  - "Final model is trained on the training split only; thresholds are chosen on validation; the test split is scored once."
+  - "Threshold 0.5 is the plain LogisticRegression.predict rule the paper most likely used."

@@ -55,6 +55,7 @@ def test_extends_merges_nested_keys(tmp_path: Path) -> None:
         "preprocessing": "p_cv",
         "split": {"method": "random_stratified", "ratios": [0.8, 0.1, 0.1]},
         "models": ["lr"],
+        "tuning": {"method": "validation", "scoring": "average_precision"},
     }
     config = load_config(write_yaml(tmp_path / "child.yaml", child))
     assert config.experiment_id == "child"
@@ -124,3 +125,83 @@ def test_circular_extends_rejected(tmp_path: Path) -> None:
 def test_missing_config_file(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="not found"):
         load_config(tmp_path / "nope.yaml")
+
+
+# ---------------------------------------------------------------- M2/M3 keys
+from cvx.config import expand_variants  # noqa: E402
+
+MODELLED = {
+    **VALID,
+    "models": ["lr"],
+    "tuning": {"method": "grouped_cv", "cv_folds": 5, "scoring": "average_precision"},
+}
+
+
+@pytest.mark.parametrize(
+    "name", ["e0_reproduce", "e1_leakage", "e2_protocol", "e3_models", "e4_ablations"]
+)
+def test_repo_experiment_configs_load(name: str) -> None:
+    config = load_config(REPO_ROOT / "configs" / f"{name}.yaml")
+    assert config.experiment_id == name and config.seed == 42
+    assert all(len(v) <= 3 for grid in config.grids.values() for v in grid.values())
+
+
+def test_grid_with_more_than_three_values_rejected(tmp_path: Path) -> None:
+    bad = {**MODELLED, "grids": {"lr": {"C": [0.01, 0.1, 1, 10]}}}
+    with pytest.raises(ConfigError, match="speed mode"):
+        load_config(write_yaml(tmp_path / "c.yaml", bad))
+
+
+def test_models_need_tuning(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="tuning"):
+        load_config(write_yaml(tmp_path / "c.yaml", {**VALID, "models": ["lr"]}))
+
+
+def test_grouped_cv_needs_grouped_split(tmp_path: Path) -> None:
+    bad = {**MODELLED, "split": {"method": "random_stratified", "ratios": [0.8, 0.1, 0.1]}}
+    with pytest.raises(ConfigError, match="grouped_cv"):
+        load_config(write_yaml(tmp_path / "c.yaml", bad))
+
+
+def test_variants_expand_with_overrides(tmp_path: Path) -> None:
+    data = {
+        **MODELLED,
+        "variants": [
+            {"name": "a", "overrides": {"preprocessing": "p_cv"}},
+            {"name": "b", "overrides": {"features": {"metadata": True}, "models": ["xgb"]}},
+        ],
+        "compare_to": "a",
+    }
+    config = load_config(write_yaml(tmp_path / "c.yaml", data))
+    expanded = dict(expand_variants(config))
+    assert list(expanded) == ["a", "b"]
+    assert expanded["a"].preprocessing == "p_cv" and expanded["a"].models == ["lr"]
+    assert expanded["b"].features.metadata is True and expanded["b"].models == ["xgb"]
+    assert expanded["b"].preprocessing == "p_cvx" and expanded["b"].variants == []
+
+
+def test_no_variants_gives_main(tmp_path: Path) -> None:
+    config = load_config(write_yaml(tmp_path / "c.yaml", MODELLED))
+    assert [name for name, _ in expand_variants(config)] == ["main"]
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"variants": [{"name": "a"}, {"name": "a"}]}, "unique"),
+        ({"variants": [{"name": "A-1"}]}, "only a-z"),
+        ({"variants": [{"name": "a", "overrides": {"experiment_id": "x"}}]}, "may not override"),
+        ({"variants": [{"name": "a", "overrides": {"sead": 1}}]}, "sead"),
+        ({"variants": [{"name": "a"}], "compare_to": "b"}, "compare_to"),
+        ({"resample": {"method": "smote", "when": "before_split"}}, "random split"),
+        ({"resample": {"method": "copy", "when": "train_only"}}, "resample.method"),
+        (
+            {"models": ["xgb"], "resample": {"method": "smote", "when": "train_only"}},
+            "not supported",
+        ),
+        ({"stats": {"mcnemar": [["lr"]]}}, "pair"),
+    ],
+)
+def test_invalid_m2_keys_rejected(tmp_path: Path, change: dict, message: str) -> None:
+    with pytest.raises(ConfigError, match=message):
+        load_config(write_yaml(tmp_path / "c.yaml", {**MODELLED, **change}))

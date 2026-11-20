@@ -1,0 +1,36 @@
+# E4 — Feature and imbalance ablations (PRD Section 8.2).
+# text vs full (text + metadata) for LR and XGBoost; class weights vs SMOTE inside training for LR.
+# The fitted models are saved: M6 exports lr_text, lr_full, xgb_text and xgb_full from this run.
+experiment_id: e4_ablations
+extends: base.yaml
+
+preprocessing: p_cvx
+models: [lr, xgb]
+grids:
+  lr: {C: [0.1, 1.0, 10.0]}
+tuning: {method: grouped_cv, cv_folds: 5, scoring: average_precision}
+thresholds: [0.5, t_f1, t_r90]
+stats:
+  bootstrap: 1000
+  mcnemar:
+    - [text/lr, full/lr]
+    - [text/xgb, full/xgb]
+    - [text/lr, text_smote/lr]
+export_models: true
+
+variants:
+  - name: text
+    overrides: {features: {metadata: false}}
+  - name: full
+    overrides: {features: {metadata: true}}
+  - name: text_smote
+    overrides:
+      features: {metadata: false}
+      models: [lr]
+      resample: {method: smote, when: train_only}
+
+assumptions:
+  - "Corrected split, tuning and model settings as in E3."
+  - "Metadata features as in PRD Section 7.2 and the owner-approved definitions: log_text_length and n_url/n_email/n_phone from the cleaned P-CVX text without labels; exclamation_count, uppercase_ratio and money_mentions from the text after HTML stripping and contact masking, before lowercasing."
+  - "Numeric metadata scaled with StandardScaler(with_mean=False); employment_type, required_experience and required_education one-hot; function keeps its top 20 values plus Other."
+  - "SMOTE (k_neighbors=5, seed 42) runs inside an imbalanced-learn Pipeline, so only training rows of each CV fold and of the final fit are resampled; class_weight='balanced' stays on but is about 1 after SMOTE, so this is 'class weights vs SMOTE'."

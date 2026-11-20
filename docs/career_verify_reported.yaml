@@ -1,0 +1,23 @@
+# Career Verify (IEEE AIDE 2026) — values REPORTED IN THE PAPER, for the comparison table
+# reports/tables/career_verify_vs_e0_vs_e2.md (made by scripts/make_tables.py).
+#
+# The OWNER fills this file in from the paper. The coding agent must not type these
+# numbers (CLAUDE.md rule 2).
+#   - Replace each FILL with the paper's value. Rates as fractions 0-1 (96% -> 0.96);
+#     confusion-matrix entries as whole counts.
+#   - Write null if the paper does not report that value (the table then says "not reported").
+#   - "source": where in the paper the values are (table/figure and page).
+
+source: FILL
+accuracy: FILL
+precision: FILL        # fake class
+recall: FILL           # fake class
+f1: FILL               # fake class
+pr_auc: FILL
+roc_auc: FILL
+tn: FILL
+fp: FILL
+fn: FILL
+tp: FILL
+test_rows: FILL
+test_fake_share: FILL
