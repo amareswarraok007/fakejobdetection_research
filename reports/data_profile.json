@@ -1,0 +1,273 @@
+{
+  "dataset": {
+    "file": "fake_job_postings.csv",
+    "sha256": "59253295129d8b6a27607f9904f7d4ddf4dbb0ee35e079c7eb51b58b5e62bf60"
+  },
+  "generated_at_utc": "2026-11-19T23:56:44+00:00",
+  "counts_before_dedup": {
+    "rows": 17880,
+    "genuine": 17014,
+    "fake": 866,
+    "fraud_rate": 0.04843400447427293
+  },
+  "counts_after_exact_dedup": {
+    "rows": 17599,
+    "genuine": 16743,
+    "fake": 856,
+    "fraud_rate": 0.04863912722313768
+  },
+  "duplicates": {
+    "exact_duplicates_removed": 281,
+    "near_duplicates": {
+      "threshold": 0.95,
+      "text": "p_cvx without field labels, TfidfVectorizer defaults",
+      "rows": 17599,
+      "groups": 13049,
+      "groups_with_more_than_one_row": 1497,
+      "rows_in_such_groups": 6047,
+      "largest_group_size": 402,
+      "groups_with_mixed_labels": 1
+    }
+  },
+  "missing_rate_by_class": {
+    "title": {
+      "all": 0.0,
+      "fake": 0.0,
+      "genuine": 0.0
+    },
+    "location": {
+      "all": 0.01935123042505593,
+      "fake": 0.021939953810623556,
+      "genuine": 0.01921946632185259
+    },
+    "department": {
+      "all": 0.6461409395973154,
+      "fake": 0.6131639722863741,
+      "genuine": 0.647819442811802
+    },
+    "salary_range": {
+      "all": 0.8395973154362416,
+      "fake": 0.7424942263279446,
+      "genuine": 0.8445397907605501
+    },
+    "company_profile": {
+      "all": 0.18501118568232663,
+      "fake": 0.6778290993071594,
+      "genuine": 0.15992711884330552
+    },
+    "description": {
+      "all": 0.00011185682326621924,
+      "fake": 0.0023094688221709007,
+      "genuine": 0.0
+    },
+    "requirements": {
+      "all": 0.15089485458612975,
+      "fake": 0.17782909930715934,
+      "genuine": 0.14952392147643118
+    },
+    "benefits": {
+      "all": 0.40380313199105144,
+      "fake": 0.42032332563510394,
+      "genuine": 0.40296226636887267
+    },
+    "telecommuting": {
+      "all": 0.0,
+      "fake": 0.0,
+      "genuine": 0.0
+    },
+    "has_company_logo": {
+      "all": 0.0,
+      "fake": 0.0,
+      "genuine": 0.0
+    },
+    "has_questions": {
+      "all": 0.0,
+      "fake": 0.0,
+      "genuine": 0.0
+    },
+    "employment_type": {
+      "all": 0.1941275167785235,
+      "fake": 0.27829099307159355,
+      "genuine": 0.18984365816386506
+    },
+    "required_experience": {
+      "all": 0.39429530201342283,
+      "fake": 0.5023094688221709,
+      "genuine": 0.388797460914541
+    },
+    "required_education": {
+      "all": 0.4532997762863535,
+      "fake": 0.5207852193995381,
+      "genuine": 0.449864817209357
+    },
+    "industry": {
+      "all": 0.27421700223713646,
+      "fake": 0.31755196304849886,
+      "genuine": 0.27201128482426234
+    },
+    "function": {
+      "all": 0.3610178970917226,
+      "fake": 0.3891454965357968,
+      "genuine": 0.3595862231103797
+    }
+  },
+  "metadata_fraud_rates": {
+    "telecommuting": {
+      "yes": {
+        "rows": 767,
+        "fake": 64,
+        "fraud_rate": 0.08344198174706649
+      },
+      "no": {
+        "rows": 17113,
+        "fake": 802,
+        "fraud_rate": 0.04686495646584468
+      }
+    },
+    "has_company_logo": {
+      "yes": {
+        "rows": 14220,
+        "fake": 283,
+        "fraud_rate": 0.01990154711673699
+      },
+      "no": {
+        "rows": 3660,
+        "fake": 583,
+        "fraud_rate": 0.1592896174863388
+      }
+    },
+    "has_questions": {
+      "yes": {
+        "rows": 8792,
+        "fake": 250,
+        "fraud_rate": 0.02843494085532302
+      },
+      "no": {
+        "rows": 9088,
+        "fake": 616,
+        "fraud_rate": 0.06778169014084508
+      }
+    },
+    "salary_given": {
+      "yes": {
+        "rows": 2868,
+        "fake": 223,
+        "fraud_rate": 0.07775453277545327
+      },
+      "no": {
+        "rows": 15012,
+        "fake": 643,
+        "fraud_rate": 0.04283240074606981
+      }
+    }
+  },
+  "text_length_chars": {
+    "fake": {
+      "count": 866,
+      "min": 14.0,
+      "q25": 948.0,
+      "median": 1654.5,
+      "q75": 2872.75,
+      "max": 9751.0,
+      "mean": 2077.309468822171
+    },
+    "genuine": {
+      "count": 17014,
+      "min": 80.0,
+      "q25": 1639.0,
+      "median": 2560.0,
+      "q75": 3496.75,
+      "max": 14942.0,
+      "mean": 2699.8745151052076
+    }
+  },
+  "top10_fake_locations": [
+    {
+      "value": "US, TX, Houston",
+      "fake_count": 92
+    },
+    {
+      "value": "AU, NSW, Sydney",
+      "fake_count": 31
+    },
+    {
+      "value": "US, ,",
+      "fake_count": 28
+    },
+    {
+      "value": "US, CA, Bakersfield",
+      "fake_count": 24
+    },
+    {
+      "value": "US, CA, San Mateo",
+      "fake_count": 24
+    },
+    {
+      "value": "US, CA, Los Angeles",
+      "fake_count": 23
+    },
+    {
+      "value": "US, NY, New York",
+      "fake_count": 20
+    },
+    {
+      "value": "US, CA, San Jose",
+      "fake_count": 14
+    },
+    {
+      "value": "US, TX, AUSTIN",
+      "fake_count": 14
+    },
+    {
+      "value": "US, TX, DALLAS",
+      "fake_count": 12
+    }
+  ],
+  "top10_fake_industries": [
+    {
+      "value": "Oil & Energy",
+      "fake_count": 109
+    },
+    {
+      "value": "Accounting",
+      "fake_count": 57
+    },
+    {
+      "value": "Hospital & Health Care",
+      "fake_count": 51
+    },
+    {
+      "value": "Marketing and Advertising",
+      "fake_count": 45
+    },
+    {
+      "value": "Financial Services",
+      "fake_count": 35
+    },
+    {
+      "value": "Information Technology and Services",
+      "fake_count": 32
+    },
+    {
+      "value": "Telecommunications",
+      "fake_count": 26
+    },
+    {
+      "value": "Real Estate",
+      "fake_count": 24
+    },
+    {
+      "value": "Consumer Services",
+      "fake_count": 24
+    },
+    {
+      "value": "Leisure, Travel & Tourism",
+      "fake_count": 21
+    }
+  ],
+  "vocabulary_size_after_cleaning": {
+    "p_cv": 91839,
+    "p_cvx": 101814
+  },
+  "scope_note": "Duplicates: near-duplicate groups are computed after exact-duplicate removal. All other statistics use the full dataset as downloaded."
+}
