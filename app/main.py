@@ -5,18 +5,27 @@ The model store folder can be changed with the environment variable CVX_MODEL_ST
 """
 
 import os
+import sys
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import streamlit as st
 
-from cvx import service
-from cvx.artifacts.load import ModelStoreError
-from cvx.evaluate.plots import shap_bar_figure
-from cvx.schema import InputError
+_APP_DIR = str(Path(__file__).resolve().parent)
+if _APP_DIR not in sys.path:
+    sys.path.insert(0, _APP_DIR)
+
+from style import APP_CSS, hero_html, rule_card_html, verdict_html  # noqa: E402
+
+from cvx import service  # noqa: E402
+from cvx.artifacts.load import ModelStoreError  # noqa: E402
+from cvx.evaluate.plots import shap_bar_figure  # noqa: E402
+from cvx.schema import InputError  # noqa: E402
 
 STORE_PATH = os.environ.get("CVX_MODEL_STORE", "app/model_store")
 YES_NO = ("No", "Yes")
+HERO_PILLS = ("100% Offline & Local", "SHA-256 Verified Models", "SHAP + LIME + Rules R1–R7")
 
 
 @st.cache_resource
@@ -26,22 +35,54 @@ def get_store(path: str) -> Any:
 
 
 def sidebar(store: Any) -> None:
-    """System check box shown on every run of the page."""
+    """Brand header, verification badge, risk legend and expandable system check."""
+    info = service.health(store)
+    models = ", ".join(info.get("models", []))
+    st.sidebar.markdown(
+        '<div class="cvx-sidebar-brand">'
+        "<strong>CareerVerify-XAI</strong>"
+        "<span>Leakage-Aware Job Fraud Detector</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    st.sidebar.markdown(
+        f'<div class="cvx-status-ok">Models verified · {models}</div>',
+        unsafe_allow_html=True,
+    )
+    st.sidebar.caption("Runs locally on your laptop. Nothing you paste is saved or sent online.")
+    with st.sidebar.expander("How overall risk is computed", expanded=False):
+        st.markdown(
+            "- **Model level:** Low (`< t_r90`), Medium (`t_r90` to `t_f1`), High (`>= t_f1`).\n"
+            "- **Rules level:** Low (none / Low rules), Medium (1 Medium), "
+            "High (any High or 2+ Medium).\n"
+            "- **Overall risk:** the **higher** of the two (scores are never added)."
+        )
     with st.sidebar.expander("System check", expanded=False):
-        st.json(service.health(store))
+        st.json(info)
 
 
 def full_posting_fields(options: dict[str, list[str]]) -> dict[str, Any]:
-    """Inputs for a full posting (inside the form)."""
+    """Inputs for a structured job posting (inside the form)."""
+    st.markdown('<div class="cvx-section-label">Job Details</div>', unsafe_allow_html=True)
+    col_a, col_b, col_c = st.columns([2, 1.5, 1])
     form: dict[str, Any] = {
-        "title": st.text_input("Job title *"),
-        "company_name": st.text_input("Company name"),
-        "company_profile": st.text_area("Company description"),
-        "description": st.text_area("Job description *", height=180),
-        "requirements": st.text_area("Requirements"),
-        "benefits": st.text_area("Benefits"),
-        "salary_range": st.text_input("Salary range"),
+        "title": col_a.text_input("Job title *", placeholder="e.g., Junior Python Developer"),
+        "company_name": col_b.text_input("Company name", placeholder="e.g., Acme Cloud Pvt Ltd"),
+        "salary_range": col_c.text_input("Salary range", placeholder="e.g., 50000-70000"),
     }
+    form["description"] = st.text_area(
+        "Job description *",
+        height=160,
+        placeholder="Paste the main role summary and responsibilities…",
+    )
+    t1, t2, t3 = st.columns(3)
+    form["company_profile"] = t1.text_area("Company description", height=100)
+    form["requirements"] = t2.text_area("Requirements", height=100)
+    form["benefits"] = t3.text_area("Benefits", height=100)
+    st.markdown(
+        '<div class="cvx-section-label">Role Attributes &amp; Signals</div>',
+        unsafe_allow_html=True,
+    )
     columns = st.columns(4)
     for column, key in zip(
         columns,
@@ -71,82 +112,143 @@ def input_form(store: Any, mode: str) -> tuple[dict[str, Any], str, bool]:
         if mode == "full":
             form = full_posting_fields(service.category_options(store))
         else:
-            form = {"message": st.text_area("Paste the job message *", height=220)}
-        form["recruiter_email"] = st.text_input("Recruiter email (optional, rules only)")
-        form["company_website"] = st.text_input("Company website (optional, rules only)")
-        choice = st.selectbox("Model", service.CHOICES)
-        submitted = st.form_submit_button("Analyze")
+            st.markdown('<div class="cvx-section-label">Job Message</div>', unsafe_allow_html=True)
+            form = {
+                "message": st.text_area(
+                    "Paste the job message *",
+                    height=200,
+                    placeholder="Paste a job offer from WhatsApp, Telegram, email, or a portal…",
+                )
+            }
+        st.markdown(
+            '<div class="cvx-section-label">Optional Recruiter Verification (Rules R3 & R4)</div>',
+            unsafe_allow_html=True,
+        )
+        c1, c2, c3 = st.columns([2, 2, 1.2])
+        form["recruiter_email"] = c1.text_input(
+            "Recruiter email (optional, rules only)", placeholder="e.g., hr@company.com"
+        )
+        form["company_website"] = c2.text_input(
+            "Company website (optional, rules only)", placeholder="e.g., https://company.com"
+        )
+        choice = c3.selectbox("Model", service.available_choices(store, mode))
+        submitted = st.form_submit_button("Analyze", type="primary", width="stretch")
     return form, choice, submitted
 
 
 def show_rules(result: dict[str, Any]) -> None:
-    """The separate 'Safety checks (rules, not AI)' box."""
+    """The separate 'Safety checks (rules, not AI)' card."""
     with st.container(border=True):
-        st.subheader("Safety checks (rules, not AI)")
+        st.markdown("#### Safety checks (rules, not AI)")
         if not result["rules"]:
-            st.write("No rule fired.")
+            st.success("No safety rule fired for this posting.")
+            return
         for hit in result["rules"]:
-            matched = ", ".join(f"‘{m}’" for m in hit["matched"])
-            st.write(
-                f"**{hit['rule_id']} · {hit['severity']}** — {hit['message']} (matched: {matched})"
-            )
+            st.markdown(rule_card_html(hit), unsafe_allow_html=True)
+
+
+def show_shap_block(result: dict[str, Any]) -> None:
+    """Top-10 SHAP chart alongside its matching accessible data table."""
+    with st.container(border=True):
+        st.markdown("#### Feature Attribution (Top-10 SHAP)")
+        chart_col, table_col = st.columns([1.45, 1])
+        items = [(row["feature"], row["shap"]) for row in result["shap"]]
+        chart_col.pyplot(shap_bar_figure(items, "Top-10 SHAP features"))
+        frame = pd.DataFrame(result["shap"])
+        if not frame.empty:
+            label = lambda v: "Towards fake (+)" if v > 0 else "Towards genuine (−)"  # noqa: E731
+            frame = frame.assign(direction=frame["shap"].map(label))
+        table_col.dataframe(frame, hide_index=True, width="stretch")
 
 
 def show_result(result: dict[str, Any]) -> None:
-    """Score, risk level, reasons, highlighted text, SHAP chart + table, rules."""
+    """Verdict banner, KPI metrics, reasons, highlighted text, safety rules and SHAP chart."""
     risk = result["risk"]
     st.subheader(f"Overall risk: {risk['overall']}")
-    st.write(f"Model: {risk['model']} · Safety rules: {risk['rules']} · Overall: {risk['overall']}")
-    st.metric(
+    st.markdown(verdict_html(result), unsafe_allow_html=True)
+    k1, k2, k3 = st.columns(3)
+    k1.metric(
         "Model score (probability of fake)",
         f"{result['score']:.3f}",
         help=f"Model: {result['model_id']}; thresholds: {result['thresholds']}",
     )
-    st.markdown("**Why (top reasons)**")
-    for reason in result["reasons"]:
-        st.write(f"- {reason}")
-    st.info(result["caution"])
-    st.markdown("**Highlighted text** (red + = towards fake, green − = towards genuine)")
-    st.markdown(result["highlight_html"], unsafe_allow_html=True)  # built from escaped text
-    items = [(row["feature"], row["shap"]) for row in result["shap"]]
-    st.pyplot(shap_bar_figure(items, "Top-10 SHAP features"))
-    st.dataframe(pd.DataFrame(result["shap"]), hide_index=True)  # same numbers as the chart
-    show_rules(result)
+    k2.metric("Model risk band", risk["model"])
+    k3.metric("Safety rules band", risk["rules"])
+    left, right = st.columns([1.25, 1])
+    with left:
+        with st.container(border=True):
+            st.markdown("#### Why this score? (Top reasons)")
+            for reason in result["reasons"]:
+                st.markdown(f"- {reason}")
+            st.info(result["caution"])
+        with st.container(border=True):
+            st.markdown("#### Highlighted text")
+            st.markdown(
+                '<div class="cvx-legend">'
+                '<span><mark style="background:rgba(220,38,38,0.35);color:#111;border-radius:3px">'
+                "Red +</mark> pushes towards fake</span>"
+                '<span><mark style="background:rgba(22,163,74,0.35);color:#111;border-radius:3px">'
+                "Green −</mark> pushes towards genuine</span>"
+                "<span>Hover any word for its exact SHAP score</span></div>"
+                f'<div class="cvx-highlight-box">{result["highlight_html"]}</div>',
+                unsafe_allow_html=True,
+            )
+    with right:
+        show_rules(result)
+    show_shap_block(result)
 
 
 def lime_section(store: Any) -> None:
     """'Explain with LIME' button (outside the form) and the SHAP comparison."""
     form, mode, result = (st.session_state[k] for k in ("form", "mode", "result"))
-    if st.button("Explain with LIME"):
-        with st.spinner("Running LIME (about 1,000 model calls)…"):
-            st.session_state["lime"] = service.lime_compare(
-                form, mode, result["model_id"], result["words"], store
-            )
-    lime = st.session_state.get("lime")
-    if lime:
-        st.write(
-            f"Top-5 overlap with SHAP (Jaccard): {lime['jaccard_top5']:.2f} "
-            f"· {lime['seconds']:.1f} s"
+    with st.container(border=True):
+        st.markdown("#### Cross-check with LIME (Optional)")
+        st.caption(
+            "Runs a 1,000-sample perturbation explainer on the same posting to check how closely "
+            "LIME agrees with SHAP."
         )
-        st.dataframe(pd.DataFrame(lime["lime"]), hide_index=True)
+        if st.button("Explain with LIME"):
+            with st.spinner("Running LIME (about 1,000 model calls)…"):
+                st.session_state["lime"] = service.lime_compare(
+                    form, mode, result["model_id"], result["words"], store
+                )
+        lime = st.session_state.get("lime")
+        if lime:
+            m1, m2 = st.columns(2)
+            m1.metric("Top-5 overlap with SHAP (Jaccard)", f"{lime['jaccard_top5']:.2f}")
+            m2.metric("LIME runtime", f"{lime['seconds']:.2f} s")
+            st.dataframe(pd.DataFrame(lime["lime"]), hide_index=True, width="stretch")
+
+
+def _mode_label(mode: str) -> str:
+    """Readable label for each input mode."""
+    return (
+        "Full posting (text + metadata)"
+        if mode == "full"
+        else "Text only (WhatsApp / email message)"
+    )
 
 
 def main() -> None:
     """Draw the Analyze page."""
     st.set_page_config(page_title="CareerVerify-XAI", page_icon="🔎", layout="wide")
-    st.title("CareerVerify-XAI: is this job posting fake?")
+    st.markdown(APP_CSS, unsafe_allow_html=True)
+    st.markdown(
+        hero_html(
+            "CareerVerify-XAI",
+            "Leakage-aware fake job posting detector with verified SHAP & LIME explanations "
+            "and deterministic safety rules.",
+            HERO_PILLS,
+        ),
+        unsafe_allow_html=True,
+    )
     try:
         store = get_store(STORE_PATH)
     except ModelStoreError as error:
         st.error(f"The app cannot start: {error}")
         st.stop()
     sidebar(store)
-    mode = st.radio(
-        "Input",
-        ("full", "text"),
-        horizontal=True,
-        format_func=lambda m: "Full posting" if m == "full" else "Text only (message)",
-    )
+    mode = st.radio("Input mode", ("full", "text"), horizontal=True, format_func=_mode_label)
     form, choice, submitted = input_form(store, mode)
     if submitted:
         try:

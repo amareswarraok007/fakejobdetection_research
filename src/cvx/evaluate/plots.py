@@ -77,21 +77,40 @@ def shap_bar_figure(items: list[tuple[str, float]], title: str) -> Figure:
     """
     labels = [label for label, _ in items][::-1]
     values = [value for _, value in items][::-1]
-    fig = Figure(figsize=(6, 0.35 * max(len(items), 1) + 1))
-    ax = fig.add_subplot()
+    fig = Figure(figsize=(6.4, 0.42 * max(len(items), 1) + 1.15), facecolor="#ffffff")
+    ax = fig.add_subplot(facecolor="#ffffff")
     colours = ["#dc2626" if v > 0 else "#16a34a" for v in values]
-    ax.barh(range(len(values)), values, color=colours)
-    ax.set_yticks(range(len(values)), labels)
+    ax.barh(range(len(values)), values, color=colours, height=0.64, edgecolor="none", zorder=3)
+    ax.set_yticks(range(len(values)), labels, fontsize=9, color="#1e293b")
+    ax.xaxis.grid(True, linestyle="--", linewidth=0.6, color="#e2e8f0", zorder=0)
+    ax.set_axisbelow(True)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    for spine in ("left", "bottom"):
+        ax.spines[spine].set_color("#cbd5e1")
+    ax.tick_params(axis="x", colors="#475569", labelsize=8.5)
+    ax.tick_params(axis="y", length=0)
+    max_abs = max((abs(v) for v in values), default=0.1) or 0.1
+    ax.set_xlim(-max_abs * 1.32, max_abs * 1.32)
     for position, value in enumerate(values):
         ax.annotate(
             f"{value:+.3f}",
             (value, position),
             va="center",
-            fontsize="small",
-            xytext=(3 if value >= 0 else -3, 0),
+            fontsize=8.5,
+            fontweight="semibold",
+            color="#991b1b" if value > 0 else "#166534",
+            xytext=(5 if value >= 0 else -5, 0),
             textcoords="offset points",
             ha="left" if value >= 0 else "right",
         )
-    ax.axvline(0, color="grey", linewidth=0.8)
-    ax.set(title=title, xlabel="SHAP value (log-odds): + towards fake, − towards genuine")
+    ax.axvline(0, color="#64748b", linewidth=1.0, zorder=4)
+    ax.set_title(title, fontsize=10.5, fontweight="bold", color="#0f172a", pad=10, loc="left")
+    ax.set_xlabel(
+        "SHAP value (log-odds):  + pushes towards fake  |  − pushes towards genuine",
+        fontsize=8.5,
+        color="#475569",
+        labelpad=6,
+    )
+    fig.tight_layout()
     return fig

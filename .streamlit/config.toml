@@ -14,3 +14,12 @@ gatherUsageStats = false
 # Hide Python error details from the page ("none" shows only a generic error).
 showErrorDetails = "none"
 toolbarMode = "minimal"
+
+[theme]
+# Clean light theme: high WCAG AA contrast, crisp highlights and matplotlib chart integration.
+base = "light"
+primaryColor = "#2563EB"
+backgroundColor = "#F8FAFC"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F172A"
+font = "sans serif"

@@ -26,6 +26,13 @@ TOP_FEATURES = 10
 LIME_SAMPLES = 1000
 
 
+def available_choices(store: ModelStore, mode: str) -> tuple[str, ...]:
+    """Dropdown choices supported by the loaded model store for ``mode``."""
+    suffix = "full" if mode == "full" else "text"
+    present = [label for label, prefix in _PREFIX.items() if f"{prefix}_{suffix}" in store.models]
+    return ("Auto", *present) if present else ("Auto",)
+
+
 def open_store(path: str) -> ModelStore:
     """Load the model store; raises ``ModelStoreError`` if any safety check fails."""
     return load_store(path)
